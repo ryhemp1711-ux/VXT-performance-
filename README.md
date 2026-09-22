@@ -23,7 +23,7 @@ For GitHub Pages: in repository Settings → Pages, choose **Deploy from a branc
 
 Data is stored in localStorage under `vxt-performance-v1`. It is browser/device/origin specific, not encrypted by this app and not cloud-synced. Clearing browser data removes records. Storage failures are shown rather than reported as successful saves. Corrupt existing data is not silently overwritten. An exported backup contains athlete names, results, notes, and predictions; keep it private. Nothing is sent to a server by the application.
 
-This is a usable MVP, not a multi-user service. Athlete login, access roles, cloud storage, roster editing, and automated imports are future work. There are no automatic conversions between hand, gates, video, and FAT timing.
+This is a usable MVP, not a multi-user service. Athlete login, access roles, cloud storage, automated imports are future work. There are no automatic conversions between hand, gates, video, and FAT timing.
 
 ## Predictor provenance
 
@@ -48,3 +48,9 @@ Before adding cloud storage, implement authentication and per-athlete authorizat
 ## Verification
 
 Run `npm test` for formula, flying-distance normalization, input validation, and backup validation checks. JavaScript syntax is checked with `node --check app.js` and `node --check model.js`. Full visual and end-to-end browser verification remains outstanding.
+
+## Record management (v0.2)
+
+Use Edit in Result history to correct dates, times, events, methods, or notes. Cancel leaves the saved record unchanged. Roster Delete asks for confirmation and removes that athlete’s results and predictions too. Export a backup first if needed. Your selected athlete is remembered on this browser.
+
+The predictor fills saved personal bests for the active athlete and selected timing method, displaying source dates. Flying distance uses only the matching Fly event, never a standing-start time. Missing results stay blank. Change the timing method or click Use saved bests to refill; manual changes remain editable. Changing athletes, events, or saved results resets the predictor. Formulas are unchanged and remain experimental.

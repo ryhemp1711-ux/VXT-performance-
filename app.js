@@ -1,6 +1,8 @@
 'use strict';
 const $=s=>document.querySelector(s),key='vxt-performance-v1',fresh=()=>({version:1,athletes:[],results:[],predictions:[]});
-let data=fresh(),active='',latest=null,storageBlocked=false;
+let data=fresh(),active='',latest=null,storageBlocked=false,editingId=null;
+const activeKey=key+'-active';
+try{active=localStorage.getItem(activeKey)||'';}catch{}
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
@@ -12,26 +14,75 @@ function table(headers,rows){return rows.length?'<table><thead><tr>'+headers.map
 function tab(id){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('#page-title').textContent={dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup'}[id];}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.tab)));
 function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
+try{localStorage.setItem(activeKey,active);}catch{message('Athlete selection could not be remembered.',true);}
 const results=data.results.filter(r=>r.athleteId===active).sort((a,b)=>b.date.localeCompare(a.date));const preds=data.predictions.filter(r=>r.athleteId===active);
 $('#stats').innerHTML=[['ATHLETES',data.athletes.length,'In your roster'],['RESULTS',results.length,'For the active athlete'],['PREDICTIONS',preds.length,'Saved coaching estimates']].map(([a,b,c])=>'<div class="stat"><span class="eyebrow">'+a+'</span><strong>'+b+'</strong><small>'+c+'</small></div>').join('');
-$('#roster').innerHTML=data.athletes.length?data.athletes.map(a=>'<div class="roster-row"><span>'+esc(a.name)+'</span><button data-select="'+esc(a.id)+'">'+(a.id===active?'Selected':'View')+'</button></div>').join(''):'<p class="empty">Add your first athlete above, or try demo data in Data & backup.</p>';
-$('#history').innerHTML=table(['Date','Event','Time','Timing','Notes',''],results.map(r=>[esc(r.date),esc(r.event),r.time.toFixed(2)+'s',esc(r.method||'Unknown'),esc(r.notes),'<button data-delete="'+esc(r.id)+'" aria-label="Delete result '+esc(r.event)+' '+esc(r.date)+'">Delete</button>']));
+$('#roster').innerHTML=data.athletes.length?data.athletes.map(a=>'<div class="roster-row"><span>'+esc(a.name)+'</span><button data-select="'+esc(a.id)+'">'+(a.id===active?'Selected':'View')+'</button><button data-remove-athlete="'+esc(a.id)+'" aria-label="Delete athlete '+esc(a.name)+'">Delete</button></div>').join(''):'<p class="empty">Add your first athlete above, or try demo data in Data & backup.</p>';
+$('#history').innerHTML=table(['Date','Event','Time','Timing','Notes',''],results.map(r=>[esc(r.date),esc(r.event),r.time.toFixed(2)+'s',esc(r.method||'Unknown'),esc(r.notes),'<button data-edit="'+esc(r.id)+'">Edit</button> <button data-delete="'+esc(r.id)+'" aria-label="Delete result '+esc(r.event)+' '+esc(r.date)+'">Delete</button>']));
 const bests={};for(const r of results){const k=r.event+' / '+(r.method||'Unknown');if(!bests[k]||r.time<bests[k].time)bests[k]=r;}$('#bests').innerHTML=table(['Event / timing','Best','Date'],Object.entries(bests).map(([k,r])=>[esc(k),r.time.toFixed(2)+'s',esc(r.date)]));
 $('#comparisons').innerHTML=table(['Saved','Event','Estimate','Next result','Actual − estimate'],preds.slice().reverse().map(p=>{const actual=results.filter(r=>r.event===p.event&&r.date>p.date).sort((a,b)=>a.date.localeCompare(b.date))[0];return [esc(p.date),esc(p.event),p.time.toFixed(2)+'s',actual?actual.time.toFixed(2)+'s · '+esc(actual.method||'Unknown')+' · '+esc(actual.date):'Awaiting later result',actual?(actual.time-p.time).toFixed(2)+'s':'—'];}));renderTrend();}
 function renderTrend(){const event=$('#trend-event').value,rs=data.results.filter(r=>r.athleteId===active&&r.event===event).sort((a,b)=>a.date.localeCompare(b.date));if(!rs.length){$('#trend').innerHTML='<p class="empty">Log '+esc(event)+' results to see progress here.</p>';return;}const times=rs.map(r=>r.time),min=Math.min(...times),max=Math.max(...times),span=max-min||1;const points=rs.map((r,i)=>[(rs.length===1?250:25+i*450/(rs.length-1)),135-(r.time-min)/span*110]);$('#trend').innerHTML='<svg viewBox="0 0 500 160" role="img" aria-label="'+esc(event)+' times over '+rs.length+' recorded results; best '+min.toFixed(2)+' seconds"><line x1="20" y1="140" x2="480" y2="140" stroke="#dce2db"/><polyline fill="none" stroke="#467446" stroke-width="3" points="'+points.map(p=>p.join(',')).join(' ')+'"/>'+points.map((p,i)=>'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="5" fill="#467446"><title>'+esc(rs[i].date)+' · '+rs[i].time.toFixed(2)+'s · '+esc(rs[i].method||'Unknown')+'</title></circle>').join('')+'</svg><p class="trend-summary">'+esc(rs[0].date)+' → '+esc(rs.at(-1).date)+'<br>Latest: <b>'+rs.at(-1).time.toFixed(2)+'s</b> · Best recorded: <b>'+min.toFixed(2)+'s</b></p>';}
-$('#active-athlete').addEventListener('change',e=>{active=e.target.value;latest=null;$('#save-prediction').hidden=true;render();});$('#trend-event').addEventListener('change',renderTrend);
-$('#roster').addEventListener('click',e=>{const b=e.target.closest('[data-select]');if(b){active=b.dataset.select;latest=null;$('#save-prediction').hidden=true;render();}});
-$('#athlete-form').addEventListener('submit',e=>{e.preventDefault();const name=new FormData(e.target).get('name').trim();if(!name)return;const id=uid();if(commit({...data,athletes:[...data.athletes,{id,name}]})){active=id;render();e.target.reset();message('Athlete added.');}});
+$('#active-athlete').addEventListener('change',e=>{chooseAthlete(e.target.value);});$('#trend-event').addEventListener('change',renderTrend);
+$('#roster').addEventListener('click',e=>{const b=e.target.closest('[data-select]');if(b){chooseAthlete(b.dataset.select);}});
+$('#athlete-form').addEventListener('submit',e=>{e.preventDefault();const name=new FormData(e.target).get('name').trim();if(!name)return;const id=uid();if(commit({...data,athletes:[...data.athletes,{id,name}]})){chooseAthlete(id);e.target.reset();message('Athlete added.');}});
 $('#result-form [name=date]').value=today();
-$('#result-form').addEventListener('submit',e=>{e.preventDefault();if(!selected())return;const r=Object.fromEntries(new FormData(e.target));if(r.date>today()){message('Choose today or an earlier date for a completed result.',true);return;}r.time=Number(r.time);if(commit({...data,results:[...data.results,{...r,id:uid(),athleteId:active}]})){e.target.elements.time.value='';e.target.elements.notes.value='';message('Result saved.');}});
-$('#history').addEventListener('click',e=>{const b=e.target.closest('[data-delete]');if(b&&confirm('Delete this result? This cannot be undone.')){if(commit({...data,results:data.results.filter(r=>r.id!==b.dataset.delete)}))message('Result deleted.');}});
+function resetResultForm(){
+ editingId=null;$('#result-form').reset();$('#result-form [name=date]').value=today();
+ $('#result-submit').textContent='Save result';$('#cancel-edit').hidden=true;
+}
+function chooseAthlete(id){active=id;resetResultForm();render();predictorFields();}
+$('#cancel-edit').addEventListener('click',resetResultForm);
+$('#result-form').addEventListener('submit',e=>{
+ e.preventDefault();if(!selected())return;
+ const r=Object.fromEntries(new FormData(e.target));
+ if(r.date>today()){message('Choose today or an earlier date for a completed result.',true);return;}
+ r.time=Number(r.time);const old=data.results.find(x=>x.id===editingId&&x.athleteId===active);
+ if(editingId&&!old){message('That result is no longer available.',true);return;}
+ const result={...old,...r,id:old?.id||uid(),athleteId:active};
+ const results=old?data.results.map(x=>x.id===old.id?result:x):[...data.results,result];
+ if(commit({...data,results})){resetResultForm();predictorFields();message(old?'Result updated.':'Result saved.');}
+});
+$('#history').addEventListener('click',e=>{
+ const edit=e.target.closest('[data-edit]');
+ if(edit){const r=data.results.find(x=>x.id===edit.dataset.edit&&x.athleteId===active);if(!r)return;
+ editingId=r.id;for(const name of ['date','event','time','method','notes'])$('#result-form').elements[name].value=r[name]??(name==='method'?'Unknown':'');
+ $('#result-submit').textContent='Save changes';$('#cancel-edit').hidden=false;
+ $('#result-form').scrollIntoView({behavior:'smooth',block:'start'});$('#result-form [name=date]').focus();return;}
+ const b=e.target.closest('[data-delete]');
+ if(b&&confirm('Delete this result? This cannot be undone.')){
+ if(commit({...data,results:data.results.filter(r=>r.id!==b.dataset.delete)})){resetResultForm();predictorFields();message('Result deleted.');}}
+});
+$('#roster').addEventListener('click',e=>{
+ const b=e.target.closest('[data-remove-athlete]');if(!b)return;
+ const a=data.athletes.find(x=>x.id===b.dataset.removeAthlete);if(!a)return;
+ const count=data.results.filter(r=>r.athleteId===a.id).length, predictions=data.predictions.filter(r=>r.athleteId===a.id).length;
+ if(!confirm('Delete '+a.name+' and their '+count+' results and '+predictions+' predictions? Export a backup first if needed. This cannot be undone.'))return;
+ if(commit({...data,athletes:data.athletes.filter(x=>x.id!==a.id),results:data.results.filter(x=>x.athleteId!==a.id),predictions:data.predictions.filter(x=>x.athleteId!==a.id)})){
+ resetResultForm();predictorFields();message('Athlete and associated records deleted.');}
+});
 const number=(name,label,required=true)=>'<label>'+label+'<input type="number" name="'+name+'" step="0.01" min="0.01" max="3600" '+(required?'required':'')+'></label>';
-function predictorFields(){latest=null;$('#save-prediction').hidden=true;$('#prediction-output').innerHTML='<h2>Start with measured times.</h2><p>All times are in seconds. Use comparable conditions and timing methods.</p>';const event=$('#prediction-event').value;const profile='<label>Athlete profile<select name="profile"><option value="balanced">Balanced 200/400</option><option value="speed">Speed-dominant</option><option value="endurance">Endurance-dominant</option><option value="developing">Developing</option></select></label>';$('#prediction-inputs').innerHTML=event==='100m'?number('accel30','30m acceleration (from a stationary start)')+'<label>Flying distance<select name="flyDistance"><option>20</option><option>10</option><option>30</option></select></label>'+number('fly','Flying time (after a run-in)'):number('pb100','100m PB')+(event==='200m'?number('test150','150m test (optional)',false):number('pb200','200m PB (optional)',false)+number('test300','300m test (optional)',false)+'<label>Development level<select name="level"><option value="competitive">Competitive HS</option><option value="youth">Youth / development</option><option value="developing">Developing HS</option><option value="advanced">Advanced HS / college</option><option value="elite">Elite / international</option></select></label>')+profile;}
+function predictorFields(){latest=null;$('#save-prediction').hidden=true;$('#prediction-output').innerHTML='<h2>Start with measured times.</h2><p>All times are in seconds. Use comparable conditions and timing methods.</p>';const event=$('#prediction-event').value;const profile='<label>Athlete profile<select name="profile"><option value="balanced">Balanced 200/400</option><option value="speed">Speed-dominant</option><option value="endurance">Endurance-dominant</option><option value="developing">Developing</option></select></label>';$('#prediction-inputs').innerHTML=event==='100m'?number('accel30','30m acceleration (from a stationary start)')+'<label>Flying distance<select name="flyDistance"><option>20</option><option>10</option><option>30</option></select></label>'+number('fly','Flying time (after a run-in)'):number('pb100','100m PB')+(event==='200m'?number('test150','150m test (optional)',false):number('pb200','200m PB (optional)',false)+number('test300','300m test (optional)',false)+'<label>Development level<select name="level"><option value="competitive">Competitive HS</option><option value="youth">Youth / development</option><option value="developing">Developing HS</option><option value="advanced">Advanced HS / college</option><option value="elite">Elite / international</option></select></label>')+profile;autofill();}
+function autofill(){
+ latest=null;$('#save-prediction').hidden=true;
+ const form=$('#predict-form'),method=$('#autofill-method').value;
+ const rs=data.results.filter(r=>r.athleteId===active&&(r.method||'Unknown')===method);
+ const best=event=>rs.filter(r=>r.event===event).sort((a,b)=>a.time-b.time||b.date.localeCompare(a.date))[0];
+ const event=$('#prediction-event').value,used=[];
+ function fill(name,event){const r=best(event);form.elements[name].value=r?r.time:'';if(r)used.push(event+': '+r.time.toFixed(2)+'s ('+r.date+')');}
+ if(event==='100m'){
+ fill('accel30','30m');fill('fly','Fly '+form.elements.flyDistance.value+'m');
+ }else{fill('pb100','100m');if(event==='200m')fill('test150','150m');else{fill('pb200','200m');fill('test300','300m');}}
+ $('#autofill-note').textContent=used.length?'Saved bests • '+method+' • '+used.join('; ')+'. Check dates and conditions before calculating.':'No matching saved results for '+method+'. Enter measured times or choose another timing method.';
+ $('#prediction-output').textContent='Review the inputs, then calculate your estimate.';
+}
+$('#autofill-method').addEventListener('change',autofill);
+$('#autofill').addEventListener('click',autofill);
+$('#prediction-inputs').addEventListener('change',e=>{if(e.target.name==='flyDistance')autofill();});
 $('#prediction-event').addEventListener('change',predictorFields);
 $('#predict-form').addEventListener('input',()=>{latest=null;$('#save-prediction').hidden=true;$('#prediction-output').textContent='Inputs changed. Calculate to see the updated estimate.';});
 $('#predict-form').addEventListener('submit',e=>{e.preventDefault();try{const input=Object.fromEntries(new FormData(e.target));latest={...VXT.predict(input.event,input),input};$('#prediction-output').innerHTML='<div class="estimate">'+latest.center.toFixed(2)+'<small> s</small></div><h2>'+esc(latest.event)+' estimate</h2><p>'+esc(latest.detail)+'</p>';$('#save-prediction').hidden=false;message('Estimate calculated.');}catch(err){latest=null;$('#save-prediction').hidden=true;message(err.message,true);}});
 $('#save-prediction').addEventListener('click',()=>{if(!selected()||!latest)return;if(commit({...data,predictions:[...data.predictions,{id:uid(),athleteId:active,event:latest.event,time:latest.center,date:today(),model:latest.model,inputs:latest.input}]})){latest=null;$('#save-prediction').hidden=true;message('Estimate saved to the active athlete.');}});
 $('#export').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='vxt-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Backup download started.');});
-$('#import').addEventListener('click',async()=>{const f=$('#import-file').files[0];if(!f||!$('#confirm-import').checked){message('Choose a backup and check the replacement confirmation.',true);return;}if(f.size>20*1024*1024){message('Backup must be under 20 MB.',true);return;}try{const next=VXT.validateData(JSON.parse(await f.text()));if(commit(next,true)){latest=null;$('#save-prediction').hidden=true;$('#confirm-import').checked=false;$('#import-file').value='';message('Backup restored.');}}catch(e){message('Import failed; existing records kept. '+e.message,true);}});
-$('#demo').addEventListener('click',()=>{const id=uid(),dates=[21,14,7].map(days=>{const d=new Date();d.setDate(d.getDate()-days);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});if(commit({...data,athletes:[...data.athletes,{id,name:'Demo sprinter (fictional)'}],results:[...data.results,...[12.65,12.48,12.32].map((time,i)=>({id:uid(),athleteId:id,event:'100m',time,date:dates[i],method:'FAT',notes:'Fictional demonstration result'}))]})){active=id;render();tab('dashboard');message('Fictional demo athlete added.');}});
-predictorFields();render();
+$('#import').addEventListener('click',async()=>{const f=$('#import-file').files[0];if(!f||!$('#confirm-import').checked){message('Choose a backup and check the replacement confirmation.',true);return;}if(f.size>20*1024*1024){message('Backup must be under 20 MB.',true);return;}try{const next=VXT.validateData(JSON.parse(await f.text()));if(commit(next,true)){resetResultForm();predictorFields();$('#confirm-import').checked=false;$('#import-file').value='';message('Backup restored.');}}catch(e){message('Import failed; existing records kept. '+e.message,true);}});
+$('#demo').addEventListener('click',()=>{const id=uid(),dates=[21,14,7].map(days=>{const d=new Date();d.setDate(d.getDate()-days);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});if(commit({...data,athletes:[...data.athletes,{id,name:'Demo sprinter (fictional)'}],results:[...data.results,...[12.65,12.48,12.32].map((time,i)=>({id:uid(),athleteId:id,event:'100m',time,date:dates[i],method:'FAT',notes:'Fictional demonstration result'}))]})){chooseAthlete(id);tab('dashboard');message('Fictional demo athlete added.');}});
+render();predictorFields();
