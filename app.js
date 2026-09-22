@@ -11,7 +11,7 @@ try{const raw=localStorage.getItem(key);if(raw)data=VXT.validateData(JSON.parse(
 function commit(next,restoring=false){try{if(storageBlocked&&!restoring)throw Error('Restore a valid backup before adding records.');VXT.validateData(next);localStorage.setItem(key,JSON.stringify(next));data=next;storageBlocked=false;render();return true;}catch(e){message('Not saved: '+e.message,true);return false;}}
 function selected(){if(!active){message('Add or select an athlete first.',true);return false;}return true;}
 function table(headers,rows){return rows.length?'<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<p class="empty">No records yet.</p>';}
-function tab(id){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('#page-title').textContent={dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup'}[id];}
+function tab(id){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('#page-title').textContent={dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync'}[id];}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.tab)));
 function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
 try{localStorage.setItem(activeKey,active);}catch{message('Athlete selection could not be remembered.',true);}
@@ -86,3 +86,21 @@ $('#export').addEventListener('click',()=>{const url=URL.createObjectURL(new Blo
 $('#import').addEventListener('click',async()=>{const f=$('#import-file').files[0];if(!f||!$('#confirm-import').checked){message('Choose a backup and check the replacement confirmation.',true);return;}if(f.size>20*1024*1024){message('Backup must be under 20 MB.',true);return;}try{const next=VXT.validateData(JSON.parse(await f.text()));if(commit(next,true)){resetResultForm();predictorFields();$('#confirm-import').checked=false;$('#import-file').value='';message('Backup restored.');}}catch(e){message('Import failed; existing records kept. '+e.message,true);}});
 $('#demo').addEventListener('click',()=>{const id=uid(),dates=[21,14,7].map(days=>{const d=new Date();d.setDate(d.getDate()-days);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});if(commit({...data,athletes:[...data.athletes,{id,name:'Demo sprinter (fictional)'}],results:[...data.results,...[12.65,12.48,12.32].map((time,i)=>({id:uid(),athleteId:id,event:'100m',time,date:dates[i],method:'FAT',notes:'Fictional demonstration result'}))]})){chooseAthlete(id);tab('dashboard');message('Fictional demo athlete added.');}});
 render();predictorFields();
+
+// Bridge keeps cloud transport separate from local rendering and validation.
+globalThis.VXTLocal={
+ snapshot(){if(storageBlocked)throw Error('Restore a valid local backup before uploading.');return VXT.validateData(JSON.parse(JSON.stringify(data)));},
+ saveSafetyCopy(value){VXT.validateData(value);localStorage.setItem(key+'-cloud-recovery',JSON.stringify(value));},
+ replace(value){
+  const next=VXT.validateData(value);
+  const raw=localStorage.getItem(key);
+  if(raw)localStorage.setItem(key+'-cloud-recovery',raw);
+  if(!commit(next,true))throw Error('Cloud records could not be saved locally. Existing records were kept.');
+  resetResultForm();predictorFields();
+ },
+ exportSafetyCopy(){
+  const raw=localStorage.getItem(key+'-cloud-recovery');if(!raw)throw Error('No recovery copy yet. A copy is saved before replacing records.');
+  const url=URL.createObjectURL(new Blob([raw],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='vxt-recovery-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }
+};

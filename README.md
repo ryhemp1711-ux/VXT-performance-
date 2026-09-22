@@ -54,3 +54,16 @@ Run `npm test` for formula, flying-distance normalization, input validation, and
 Use Edit in Result history to correct dates, times, events, methods, or notes. Cancel leaves the saved record unchanged. Roster Delete asks for confirmation and removes that athlete’s results and predictions too. Export a backup first if needed. Your selected athlete is remembered on this browser.
 
 The predictor fills saved personal bests for the active athlete and selected timing method, displaying source dates. Flying distance uses only the matching Fly event, never a standing-start time. Missing results stay blank. Change the timing method or click Use saved bests to refill; manual changes remain editable. Changing athletes, events, or saved results resets the predictor. Formulas are unchanged and remain experimental.
+
+## v0.3: manual cloud sync
+
+Supabase project URL and publishable key are public browser configuration in `sync.js`. Never add a secret/service-role key.
+
+1. Run `supabase/schema.sql` in the project SQL Editor. It creates one JSON workspace per account, enables RLS, grants only owner reads, and restricts writes to an authenticated revision-checked function.
+2. In Authentication → URL Configuration set Site URL and an allowed redirect to `https://ryhemp1711-ux.github.io/VXT-performance-/`.
+3. Open Cloud sync in VXT, create an account, confirm the email if required, and sign in. This account is separate from the Supabase dashboard login.
+4. On the original device, Upload to cloud. On the other device, sign in with the same VXT account and Download from cloud.
+
+Transfers replace the full destination workspace; no automatic merging or background sync. Review confirmations before replacing records. Upload checks the revision atomically to reject concurrent changes. Before replacement, the old destination is saved as a single local recovery backup. Export recovery backup before another transfer if needed. Sign-out retains local records. Browser storage and independent JSON exports remain supported offline. Auth loads the pinned Supabase JS 2.57.4 UMD bundle only when Cloud sync opens.
+
+Validation: local tests cover cloud action cancellation, errors, stale revision rejection, account switching and successful transfer; live auth/RLS verification requires the owner to run SQL and sign in on two devices.
