@@ -2,11 +2,12 @@
 (()=>{
  const el=id=>document.getElementById(id);let file=null,previewURL=null,busy=false;
  const status=(s)=>el('screenshot-status').textContent=s;
+ const saveStatus=(text,error=false)=>{const node=el('screenshot-save-status');node.textContent=text;node.className=error?'error':'';status(text);node.scrollIntoView?.({behavior:'smooth',block:'center'});};
  function athletes(){const previous=el('screenshot-athlete').value;el('screenshot-athlete').replaceChildren();
   for(const a of VXTLocal.snapshot().athletes){const o=document.createElement('option');o.value=a.id;o.textContent=a.name;el('screenshot-athlete').append(o);}
   if([...el('screenshot-athlete').options].some(o=>o.value===previous))el('screenshot-athlete').value=previous;
  }
- function draw(rows){el('screenshot-rows').replaceChildren();el('screenshot-reviewed').checked=false;
+ function draw(rows){el('screenshot-save-status').textContent='';el('screenshot-rows').replaceChildren();el('screenshot-reviewed').checked=false;
   rows.forEach(row=>{const card=document.createElement('fieldset');card.className='screenshot-row';
    const source=document.createElement('legend');source.textContent=row.source||'Result';card.append(source);
    function input(label,name,value,type='text'){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.type=type;i.dataset.field=name;i.value=value;if(type==='number'){i.step='0.01';i.min='0.01';}l.append(i);card.append(l);return i;}
@@ -44,10 +45,11 @@
    if(!rows.length)throw Error('Select at least one result.');
    const target=el('screenshot-athlete');if(!target.value)throw Error('Add an athlete in Overview first.');
    const merged=VXTScreenshot.merge(VXTLocal.snapshot(),target.value,rows,()=>crypto.randomUUID());VXT.validateData(merged.data);
-   if(!confirm(`Add ${merged.added} results to ${target.selectedOptions[0].textContent}? ${merged.duplicates} exact duplicates will be skipped. Existing records are kept.`))return;
+   // The reviewed checkbox and explicit Add action confirm this additive save.
+   // Avoid a native confirm dialog that embedded browsers can suppress.
    VXTLocal.appendReviewed(merged.data);el('screenshot-review').hidden=true;
-   status(`Added ${merged.added} results; skipped ${merged.duplicates} exact duplicates. Upload to cloud when you are ready.`);
-  }catch(e){status(e.message);}
+   saveStatus(`Added ${merged.added} results to ${target.selectedOptions[0].textContent}; skipped ${merged.duplicates} exact duplicates. Open Results to see them. Upload to cloud when ready.`);
+  }catch(e){saveStatus(e.message,true);}
  });
  document.querySelector('[data-tab="screenshot"]').addEventListener('click',()=>{try{athletes();}catch(e){status(e.message);}});
 })();
