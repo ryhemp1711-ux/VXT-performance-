@@ -11,7 +11,7 @@ try{const raw=localStorage.getItem(key);if(raw)data=VXT.validateData(JSON.parse(
 function commit(next,restoring=false){try{if(storageBlocked&&!restoring)throw Error('Restore a valid backup before adding records.');VXT.validateData(next);localStorage.setItem(key,JSON.stringify(next));data=next;storageBlocked=false;render();return true;}catch(e){message('Not saved: '+e.message,true);return false;}}
 function selected(){if(!active){message('Add or select an athlete first.',true);return false;}return true;}
 function table(headers,rows){return rows.length?'<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<p class="empty">No records yet.</p>';}
-function tab(id){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('#page-title').textContent={dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync'}[id];}
+function tab(id){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('#page-title').textContent={dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync',screenshot:'Import screenshot'}[id];}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.tab)));
 function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
 try{localStorage.setItem(activeKey,active);}catch{message('Athlete selection could not be remembered.',true);}
@@ -20,14 +20,14 @@ $('#stats').innerHTML=[['ATHLETES',data.athletes.length,'In your roster'],['RESU
 $('#roster').innerHTML=data.athletes.length?data.athletes.map(a=>'<div class="roster-row"><span>'+esc(a.name)+'</span><button data-select="'+esc(a.id)+'">'+(a.id===active?'Selected':'View')+'</button><button data-remove-athlete="'+esc(a.id)+'" aria-label="Delete athlete '+esc(a.name)+'">Delete</button></div>').join(''):'<p class="empty">Add your first athlete above, or try demo data in Data & backup.</p>';
 $('#history').innerHTML=table(['Actions','Date','Event','Time','Timing','Notes'],results.map(r=>['<button data-edit="'+esc(r.id)+'">Edit</button> <button data-delete="'+esc(r.id)+'" aria-label="Delete result '+esc(r.event)+' '+esc(r.date)+'">Delete</button>',esc(r.date),esc(r.event),r.time.toFixed(2)+'s',esc(r.method||'Unknown'),esc(r.notes)]));
 const bests={};for(const r of results){const k=r.event+' / '+(r.method||'Unknown');if(!bests[k]||r.time<bests[k].time)bests[k]=r;}$('#bests').innerHTML=table(['Event / timing','Best','Date'],Object.entries(bests).map(([k,r])=>[esc(k),r.time.toFixed(2)+'s',esc(r.date)]));
-$('#comparisons').innerHTML=table(['Saved','Event','Estimate','Next result','Actual − estimate'],preds.slice().reverse().map(p=>{const actual=results.filter(r=>r.event===p.event&&r.date>p.date).sort((a,b)=>a.date.localeCompare(b.date))[0];return [esc(p.date),esc(p.event),p.time.toFixed(2)+'s',actual?actual.time.toFixed(2)+'s · '+esc(actual.method||'Unknown')+' · '+esc(actual.date):'Awaiting later result',actual?(actual.time-p.time).toFixed(2)+'s':'—'];}));renderTrend();}
+$('#comparisons').innerHTML=table(['Saved','Event','Estimate','Next result','Actual − estimate'],preds.slice().reverse().map(p=>{const actual=results.filter(r=>r.event===p.event&&r.date.length===10&&r.date>p.date).sort((a,b)=>a.date.localeCompare(b.date))[0];return [esc(p.date),esc(p.event),p.time.toFixed(2)+'s',actual?actual.time.toFixed(2)+'s · '+esc(actual.method||'Unknown')+' · '+esc(actual.date):'Awaiting later result',actual?(actual.time-p.time).toFixed(2)+'s':'—'];}));renderTrend();}
 function renderTrend(){const event=$('#trend-event').value,rs=data.results.filter(r=>r.athleteId===active&&r.event===event).sort((a,b)=>a.date.localeCompare(b.date));if(!rs.length){$('#trend').innerHTML='<p class="empty">Log '+esc(event)+' results to see progress here.</p>';return;}const times=rs.map(r=>r.time),min=Math.min(...times),max=Math.max(...times),span=max-min||1;const points=rs.map((r,i)=>[(rs.length===1?250:25+i*450/(rs.length-1)),135-(r.time-min)/span*110]);$('#trend').innerHTML='<svg viewBox="0 0 500 160" role="img" aria-label="'+esc(event)+' times over '+rs.length+' recorded results; best '+min.toFixed(2)+' seconds"><line x1="20" y1="140" x2="480" y2="140" stroke="#dce2db"/><polyline fill="none" stroke="#467446" stroke-width="3" points="'+points.map(p=>p.join(',')).join(' ')+'"/>'+points.map((p,i)=>'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="5" fill="#467446"><title>'+esc(rs[i].date)+' · '+rs[i].time.toFixed(2)+'s · '+esc(rs[i].method||'Unknown')+'</title></circle>').join('')+'</svg><p class="trend-summary">'+esc(rs[0].date)+' → '+esc(rs.at(-1).date)+'<br>Latest: <b>'+rs.at(-1).time.toFixed(2)+'s</b> · Best recorded: <b>'+min.toFixed(2)+'s</b></p>';}
 $('#active-athlete').addEventListener('change',e=>{chooseAthlete(e.target.value);});$('#trend-event').addEventListener('change',renderTrend);
 $('#roster').addEventListener('click',e=>{const b=e.target.closest('[data-select]');if(b){chooseAthlete(b.dataset.select);}});
 $('#athlete-form').addEventListener('submit',e=>{e.preventDefault();const name=new FormData(e.target).get('name').trim();if(!name)return;const id=uid();if(commit({...data,athletes:[...data.athletes,{id,name}]})){chooseAthlete(id);e.target.reset();message('Athlete added.');}});
 $('#result-form [name=date]').value=today();
 function resetResultForm(){
- editingId=null;$('#result-form').reset();$('#result-form [name=date]').value=today();
+ editingId=null;$('#result-form [name=date]').type='date';$('#result-form').reset();$('#result-form [name=date]').value=today();
  $('#result-submit').textContent='Save result';$('#cancel-edit').hidden=true;
 }
 function chooseAthlete(id){active=id;resetResultForm();render();predictorFields();}
@@ -45,7 +45,7 @@ $('#result-form').addEventListener('submit',e=>{
 $('#history').addEventListener('click',e=>{
  const edit=e.target.closest('[data-edit]');
  if(edit){const r=data.results.find(x=>x.id===edit.dataset.edit&&x.athleteId===active);if(!r)return;
- editingId=r.id;for(const name of ['date','event','time','method','notes'])$('#result-form').elements[name].value=r[name]??(name==='method'?'Unknown':'');
+ editingId=r.id;$('#result-form [name=date]').type=r.date.length===4?'text':'date';for(const name of ['date','event','time','method','notes'])$('#result-form').elements[name].value=r[name]??(name==='method'?'Unknown':'');
  $('#result-submit').textContent='Save changes';$('#cancel-edit').hidden=false;
  $('#result-form').scrollIntoView({behavior:'smooth',block:'start'});$('#result-form [name=date]').focus();return;}
  const b=e.target.closest('[data-delete]');
@@ -89,6 +89,7 @@ render();predictorFields();
 
 // Bridge keeps cloud transport separate from local rendering and validation.
 globalThis.VXTLocal={
+ appendReviewed(next){if(!commit(next))throw Error('Could not save imported results.');resetResultForm();predictorFields();},
  snapshot(){if(storageBlocked)throw Error('Restore a valid local backup before uploading.');return VXT.validateData(JSON.parse(JSON.stringify(data)));},
  saveSafetyCopy(value){VXT.validateData(value);localStorage.setItem(key+'-cloud-recovery',JSON.stringify(value));},
  replace(value){

@@ -67,3 +67,13 @@ Supabase project URL and publishable key are public browser configuration in `sy
 Transfers replace the full destination workspace; no automatic merging or background sync. Review confirmations before replacing records. Upload checks the revision atomically to reject concurrent changes. Before replacement, the old destination is saved as a single local recovery backup. Export recovery backup before another transfer if needed. Sign-out retains local records. Browser storage and independent JSON exports remain supported offline. Auth loads the pinned Supabase JS 2.57.4 UMD bundle only when Cloud sync opens.
 
 Validation: local tests cover cloud action cancellation, errors, stale revision rejection, account switching and successful transfer; live auth/RLS verification requires the owner to run SQL and sign in on two devices.
+
+## v0.4: screenshot season-record import
+
+Import screenshot reads PNG/JPEG/WebP images locally with pinned Tesseract.js 5.1.1. Upload one screenshot at a time, select an existing athlete, check editable candidates, and append reviewed results. Source images are never sent to an OCR API or stored in the repository. Initial OCR loading requires internet. If recognition fails, paste/correct extracted text in the fallback editor.
+
+The parser targets the supplied Athletic.net season-summary layout (event heading, year, Indoor/Outdoor, grade, decimal result, optional wind). It does not claim to parse arbitrary meet sheets. Unknown athlete names are never inferred; timing defaults to Unknown. Exact dates are not fabricated: imported year-only dates remain YYYY. 55m is supported. Season-only results appear in bests and trends but are excluded from subsequent-race prediction comparisons. Wind remains in notes; bests do not automatically exclude wind-assisted results.
+
+Import preserves existing data and skips exact duplicates matching athlete, event, date, time, method and notes. Changing reviewed fields can create a distinct record. Refresh both devices to v0.4 before syncing year-only or 55m results; old validation does not support them. No Supabase schema change is needed.
+
+Validation: all 20 Node tests pass. Local Tesseract CLI recognition plus the parser recovered all 16 and 15 visible rows from the two supplied screenshots, including signed wind. iPhone browser OCR performance still needs user verification.
