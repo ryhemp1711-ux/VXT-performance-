@@ -85,3 +85,13 @@ Result displays and screenshot review use MM/DD/YYYY. Season-only dates display 
 Predictor autofill defaults to All methods so imported Unknown-method results are available, and retains explicit method filters. It shows the selected date, timing method and source notes/wind. It picks the fastest matching event for the active athlete, so review older, wind-assisted or mixed-method results before calculating. 100m still needs standing 30m plus a fly split; race 55m/60m results are not substituted for fly times. 200m/400m use matching saved race times.
 
 Validation: 25 unit tests and a DOM integration check for screenshot append, standardized dates, default imported Unknown result autofill, 200m calculation, 400m inputs, and timing-method filtering.
+
+## v0.6: group training sessions
+
+Training sessions saves a named, dated practice with multiple athletes and reps. Each standing-start effort accepts a required finish time and optional cumulative 10m/20m/30m/60m splits strictly before the finish. All entered splits must increase in elapsed time. Flying events are separate and accept a finish time only; standing split differences are never relabeled as flying efforts. One timing method applies to a session.
+
+Saving adds the complete session atomically to local storage. A bad row prevents partial saves; successful saves clear the entered reps. Results retain sessionId, repId, repNumber, repEvent and isSplit to group times from the same run. Optional sessions metadata is backward-compatible with existing v1 backups. Sessions and links are included in existing JSON exports and manual cloud transfers without database changes. Refresh both devices to v0.6.
+
+The saved session summary reads current linked results, so individual edits/deletions in Results are reflected. Athlete deletion removes their times; session metadata may remain with zero reps. Session drafts persist while moving between app tabs but are not saved across page refreshes.
+
+Validation: 32 unit tests and a DOM integration check confirm multi-athlete save, optional cumulative splits, rejection of inconsistent times, atomic failure, backup round-trip, separate fly events, saved session summaries and 100m predictor autofill from a standing 30m split plus a flying effort.

@@ -38,6 +38,15 @@ function validateData(data){
  const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');ids.add(a.id);}
  let changed=false;const normalize=r=>{if(!r)throw Error('Invalid performance record.');const date=normalizeDate(r.date);if(date===r.date)return r;changed=true;return {...r,date};};
  const normalized={...data,results:data.results.map(normalize),predictions:data.predictions.map(normalize)};
+ const sessionIds=new Set();
+ if(data.sessions!=null){
+  if(!Array.isArray(data.sessions)||data.sessions.length>10000)throw Error('Invalid sessions.');
+  for(const session of data.sessions){
+   if(!session||typeof session.id!=='string'||!session.id||sessionIds.has(session.id)||typeof session.name!=='string'||!session.name.trim()||session.name.length>100||typeof session.notes!=='string'||session.notes.length>1000||!['Video','Gates','FAT','Hand','Unknown'].includes(session.method)||normalizeDate(session.date)!==session.date||session.date.length!==10)throw Error('Invalid training session.');
+   sessionIds.add(session.id);
+  }
+ }
+ for(const r of normalized.results){if(r.sessionId!=null&&(!sessionIds.has(r.sessionId)||typeof r.repId!=='string'||!r.repId||!Number.isInteger(r.repNumber)||r.repNumber<1||typeof r.isSplit!=='boolean'))throw Error('Invalid session-linked result.');}
  const seen=new Set();for(const r of [...normalized.results,...normalized.predictions]){if(!r||typeof r.id!=='string'||!r.id||seen.has(r.id)||!ids.has(r.athleteId)||!['10m','20m','30m','55m','60m','100m','150m','200m','300m','400m','Fly 10m','Fly 20m','Fly 30m'].includes(r.event)||typeof r.time!=='number'||!Number.isFinite(r.time)||r.time<=0||!/^(?:19|20)\d{2}(?:-\d{2}-\d{2})?$/.test(r.date)||!Number.isFinite(Date.parse(r.date)))throw Error('Invalid performance record.');seen.add(r.id);if(r.notes!=null&&(typeof r.notes!=='string'||r.notes.length>1000))throw Error('Invalid notes.');if(r.method!=null&&!['FAT','Gates','Hand','Video','Unknown'].includes(r.method))throw Error('Invalid timing method.');}
  return changed?normalized:data;
 }
