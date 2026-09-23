@@ -77,3 +77,11 @@ The parser targets the supplied Athletic.net season-summary layout (event headin
 Import preserves existing data and skips exact duplicates matching athlete, event, date, time, method and notes. Changing reviewed fields can create a distinct record. Refresh both devices to v0.4 before syncing year-only or 55m results; old validation does not support them. No Supabase schema change is needed.
 
 Validation: all 20 Node tests pass. Local Tesseract CLI recognition plus the parser recovered all 16 and 15 visible rows from the two supplied screenshots, including signed wind. iPhone browser OCR performance still needs user verification.
+
+## v0.5: standardized dates and imported predictor inputs
+
+Result displays and screenshot review use MM/DD/YYYY. Season-only dates display --/--/YYYY and retain YYYY in storage. Complete dates remain canonical YYYY-MM-DD in storage. Shared validation normalizes numeric US MM/DD/YYYY, M/D/YYYY, US hyphen dates and year-first slash/ISO dates from backups, screenshots, existing storage and cloud downloads, and rejects impossible calendar dates. Ambiguous numeric dates are interpreted month-first; unsupported formats require correction.
+
+Predictor autofill defaults to All methods so imported Unknown-method results are available, and retains explicit method filters. It shows the selected date, timing method and source notes/wind. It picks the fastest matching event for the active athlete, so review older, wind-assisted or mixed-method results before calculating. 100m still needs standing 30m plus a fly split; race 55m/60m results are not substituted for fly times. 200m/400m use matching saved race times.
+
+Validation: 25 unit tests and a DOM integration check for screenshot append, standardized dates, default imported Unknown result autofill, 200m calculation, 400m inputs, and timing-method filtering.

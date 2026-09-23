@@ -13,12 +13,33 @@ function predict(event,input){
  if(!Number.isFinite(center))throw Error('These values exceed the model limits.');
  return {event,center,detail,model:'hemphill-heuristic-v1',notice:'Experimental estimate, not a validated forecast. Timing method, wind, age, endurance and race conditions can change the outcome.'};
 }
+function normalizeDate(value){
+ const text=String(value??'').trim();let y,m,d;
+ if(/^(19|20)\d{2}$/.test(text))return text;
+ let match=text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+ if(match){[,y,m,d]=match;}else{
+  match=text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if(match){[,m,d,y]=match;}else{
+   match=text.match(/^--\/--\/((?:19|20)\d{2})$/);if(match)return match[1];
+   throw Error('Use MM/DD/YYYY, YYYY-MM-DD, or a four-digit season year.');
+  }
+ }
+ y=Number(y);m=Number(m);d=Number(d);const date=new Date(Date.UTC(y,m-1,d));
+ if(y<1900||y>2099||date.getUTCFullYear()!==y||date.getUTCMonth()!==m-1||date.getUTCDate()!==d)throw Error('Invalid calendar date.');
+ return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+function formatDate(value){const date=normalizeDate(value);return date.length===4?'--/--/'+date:date.slice(5,7)+'/'+date.slice(8,10)+'/'+date.slice(0,4);}
+function savedBest(results,athleteId,event,method='All'){
+ return results.filter(r=>r.athleteId===athleteId&&r.event===event&&(method==='All'||(r.method||'Unknown')===method)).sort((a,b)=>a.time-b.time||b.date.localeCompare(a.date))[0]||null;
+}
 function validateData(data){
  if(!data||data.version!==1||!Array.isArray(data.athletes)||!Array.isArray(data.results)||!Array.isArray(data.predictions))throw Error('Not a VXT version 1 backup.');
  if(data.athletes.length>5000||data.results.length>100000||data.predictions.length>100000)throw Error('Backup is too large.');
  const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');ids.add(a.id);}
- const seen=new Set();for(const r of [...data.results,...data.predictions]){if(!r||typeof r.id!=='string'||!r.id||seen.has(r.id)||!ids.has(r.athleteId)||!['10m','20m','30m','55m','60m','100m','150m','200m','300m','400m','Fly 10m','Fly 20m','Fly 30m'].includes(r.event)||typeof r.time!=='number'||!Number.isFinite(r.time)||r.time<=0||!/^(?:19|20)\d{2}(?:-\d{2}-\d{2})?$/.test(r.date)||!Number.isFinite(Date.parse(r.date)))throw Error('Invalid performance record.');seen.add(r.id);if(r.notes!=null&&(typeof r.notes!=='string'||r.notes.length>1000))throw Error('Invalid notes.');if(r.method!=null&&!['FAT','Gates','Hand','Video','Unknown'].includes(r.method))throw Error('Invalid timing method.');}
- return data;
+ let changed=false;const normalize=r=>{if(!r)throw Error('Invalid performance record.');const date=normalizeDate(r.date);if(date===r.date)return r;changed=true;return {...r,date};};
+ const normalized={...data,results:data.results.map(normalize),predictions:data.predictions.map(normalize)};
+ const seen=new Set();for(const r of [...normalized.results,...normalized.predictions]){if(!r||typeof r.id!=='string'||!r.id||seen.has(r.id)||!ids.has(r.athleteId)||!['10m','20m','30m','55m','60m','100m','150m','200m','300m','400m','Fly 10m','Fly 20m','Fly 30m'].includes(r.event)||typeof r.time!=='number'||!Number.isFinite(r.time)||r.time<=0||!/^(?:19|20)\d{2}(?:-\d{2}-\d{2})?$/.test(r.date)||!Number.isFinite(Date.parse(r.date)))throw Error('Invalid performance record.');seen.add(r.id);if(r.notes!=null&&(typeof r.notes!=='string'||r.notes.length>1000))throw Error('Invalid notes.');if(r.method!=null&&!['FAT','Gates','Hand','Video','Unknown'].includes(r.method))throw Error('Invalid timing method.');}
+ return changed?normalized:data;
 }
-const api={predict,validateData};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXT=api;
+const api={predict,validateData,normalizeDate,formatDate,savedBest};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXT=api;
 })(globalThis);

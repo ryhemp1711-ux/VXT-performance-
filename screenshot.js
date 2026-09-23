@@ -13,7 +13,7 @@
    function input(label,name,value,type='text'){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.type=type;i.dataset.field=name;i.value=value;if(type==='number'){i.step='0.01';i.min='0.01';}l.append(i);card.append(l);return i;}
    const use=input('Include this result','include','', 'checkbox');use.checked=true;
    const label=document.createElement('label');label.textContent='Event';const select=document.createElement('select');select.dataset.field='event';VXTScreenshot.events.forEach(event=>{const o=document.createElement('option');o.value=o.textContent=event;select.append(o);});select.value=row.event;label.append(select);card.append(label);
-   input('Time (seconds)','time',row.time,'number');input('Year or exact date (YYYY or YYYY-MM-DD)','date',row.date);
+   input('Time (seconds)','time',row.time,'number');input('Date (MM/DD/YYYY; --/-- means season year only)','date',VXT.formatDate(row.date));
    const ml=document.createElement('label');ml.textContent='Timing method';const ms=document.createElement('select');ms.dataset.field='method';['Unknown','FAT','Gates','Hand','Video'].forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;ms.append(o);});ml.append(ms);card.append(ml);
    input('Notes / wind / season','notes',row.notes);el('screenshot-rows').append(card);
   });el('screenshot-review').hidden=!rows.length;
@@ -41,7 +41,7 @@
   try{if(!el('screenshot-reviewed').checked)throw Error('Check the review confirmation first.');
    const rows=[...el('screenshot-rows').children].filter(c=>c.querySelector('[data-field="include"]').checked).map(c=>{
     const value=name=>c.querySelector(`[data-field="${name}"]`).value;
-    return {event:value('event'),time:Number(value('time')),date:value('date').trim(),method:value('method'),notes:value('notes')};});
+    return {event:value('event'),time:Number(value('time')),date:VXT.normalizeDate(value('date')),method:value('method'),notes:value('notes')};});
    if(!rows.length)throw Error('Select at least one result.');
    const target=el('screenshot-athlete');if(!target.value)throw Error('Add an athlete in Overview first.');
    const merged=VXTScreenshot.merge(VXTLocal.snapshot(),target.value,rows,()=>crypto.randomUUID());VXT.validateData(merged.data);
