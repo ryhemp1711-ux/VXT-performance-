@@ -5,7 +5,7 @@
  const el=id=>document.getElementById(id);
  let client, user=null, busy=false;
  const status=(text,error=false)=>{el('cloud-status').textContent=text;el('cloud-status').className=error?'error':'';};
- const count=p=>`${p.athletes.length} athletes, ${p.results.length} results, ${p.predictions.length} predictions`;
+ const count=p=>`${p.athletes.length} athletes, ${p.results.length} results, ${p.predictions.length} predictions, ${(p.sessions||[]).length} sessions`;
  function draw(){
   el('cloud-account').textContent=user?'Signed in as '+user.email:'Sign in to share your records between devices.';
   el('cloud-auth').hidden=!!user;el('cloud-actions').hidden=!user;

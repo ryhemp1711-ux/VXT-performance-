@@ -58,7 +58,7 @@ $('#roster').addEventListener('click',e=>{
  const a=data.athletes.find(x=>x.id===b.dataset.removeAthlete);if(!a)return;
  const count=data.results.filter(r=>r.athleteId===a.id).length, predictions=data.predictions.filter(r=>r.athleteId===a.id).length;
  if(!confirm('Delete '+a.name+' and their '+count+' results and '+predictions+' predictions? Export a backup first if needed. This cannot be undone.'))return;
- if(commit({...data,athletes:data.athletes.filter(x=>x.id!==a.id),results:data.results.filter(x=>x.athleteId!==a.id),predictions:data.predictions.filter(x=>x.athleteId!==a.id)})){
+ if(commit({...data,...(data.sessions?{sessions:data.sessions.map(s=>s.efforts?{...s,efforts:s.efforts.filter(e=>e.athleteId!==a.id)}:s)}:{}),athletes:data.athletes.filter(x=>x.id!==a.id),results:data.results.filter(x=>x.athleteId!==a.id),predictions:data.predictions.filter(x=>x.athleteId!==a.id)})){
  resetResultForm();predictorFields();message('Athlete and associated records deleted.');}
 });
 const number=(name,label,required=true)=>'<label>'+label+'<input type="number" name="'+name+'" step="0.01" min="0.01" max="3600" '+(required?'required':'')+'></label>';

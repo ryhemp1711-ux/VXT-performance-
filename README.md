@@ -95,3 +95,11 @@ Saving adds the complete session atomically to local storage. A bad row prevents
 The saved session summary reads current linked results, so individual edits/deletions in Results are reflected. Athlete deletion removes their times; session metadata may remain with zero reps. Session drafts persist while moving between app tabs but are not saved across page refreshes.
 
 Validation: 32 unit tests and a DOM integration check confirm multi-athlete save, optional cumulative splits, rejection of inconsistent times, atomic failure, backup round-trip, separate fly events, saved session summaries and 100m predictor autofill from a standing 30m split plus a flying effort.
+
+## v0.7: drills, longer runs, broken runs and session-save feedback
+
+Training sessions now includes continuous 250m, 300m, 350m, 450m and 500m runs; sled pushes with distance, optional load/unit and optional time; wicket runs with count, uniform spacing in feet/meters, calculated first-to-last wicket span and optional time; and broken 200m/300m/400m with 2–4 consecutive distance segments totaling the selected distance. Segment times are optional. Rest between segments is required in seconds (zero accepted); rest after any rep is optional. Total running time excludes rest and appears only when every segment is timed. Drills and broken runs stay in sessions and never become continuous-race predictor inputs.
+
+The session form uses explicit validation with visible save status instead of native browser validation that can stop submission before feedback. Successful saves clear entries only after the local commit succeeds, then open the saved summary. Empty-name, invalid splits, missing athletes and incorrect broken totals retain the form with errors. A normal Results entry alone does not create a training session. New session effort metadata retains drills without timed results and survives JSON backups and cloud transfers; no database migration is required. Refresh both devices to v0.7 before transferring new distances. Athlete deletion also removes associated stored efforts.
+
+Validation: 38 tests pass, plus DOM save-button checks for field errors, wrong-total rejection without partial writes, drill persistence after reload, automatic opening of the saved summary, and athlete deletion.

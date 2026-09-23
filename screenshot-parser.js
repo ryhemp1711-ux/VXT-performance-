@@ -1,6 +1,6 @@
 (function(root){
 'use strict';
-const events=['10m','20m','30m','55m','60m','100m','150m','200m','300m','400m','Fly 10m','Fly 20m','Fly 30m'];
+const events=['10m','20m','30m','55m','60m','100m','150m','200m','250m','300m','350m','400m','450m','500m','Fly 10m','Fly 20m','Fly 30m'];
 function parse(text){
  const rows=[];let event='';
  for(const raw of text.split(/\r?\n/)){
