@@ -49,7 +49,11 @@ function validateData(data){
     for(const e of session.efforts){
      if(!e||typeof e.id!=='string'||!e.id||effortsSeen.has(e.id)||!ids.has(e.athleteId)||!Number.isInteger(e.repNumber)||e.repNumber<1||typeof e.notes!=='string'||e.notes.length>500||(e.restAfter!=null&&!validNumber(e.restAfter)))throw Error('Invalid session effort.');
      effortsSeen.add(e.id);
-     if(e.event==='Sled push'){
+     if(e.event==='400 the hard way'){
+      if(e.distance!==400||e.runningDistance!==700||e.walkingDistance!==300||!Array.isArray(e.segments)||e.segments.length!==7||e.segments.some((p,i)=>!p||p.distance!==100||p.walkBackDistance!==(i<6?50:0)||(p.time!=null&&!validNumber(p.time,.01,3600))||(i<6?p.walkBackTime!=null&&!validNumber(p.walkBackTime):p.walkBackTime!==null)))throw Error('Invalid 400 the hard way.');
+      const total=e.segments.every(p=>p.time!=null)?e.segments.reduce((n,p)=>n+p.time,0):null;
+      if(total===null?e.runningTime!==null:!validNumber(e.runningTime,0,25200)||Math.abs(total-e.runningTime)>.001)throw Error('Invalid hard-way running time.');
+     }else if(e.event==='Sled push'){
       if(!validNumber(e.distance,.01,1000)||(e.time!=null&&!validNumber(e.time,.01,3600))||(e.load!=null&&!validNumber(e.load,0,5000))||!['lb','kg'].includes(e.loadUnit))throw Error('Invalid sled push.');
      }else if(e.event==='Wicket run'){
       if(!Number.isInteger(e.wicketCount)||!validNumber(e.wicketCount,2,100)||!validNumber(e.spacing,.01,20)||!['ft','m'].includes(e.spacingUnit)||!validNumber(e.wicketSpanMeters,0,2000)||(e.time!=null&&!validNumber(e.time,.01,3600)))throw Error('Invalid wicket run.');

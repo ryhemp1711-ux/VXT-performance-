@@ -14,3 +14,26 @@ test('four broken segments total distance and running time excluding rest',()=>{
 test('broken run permits untimed segments with explicit rest including zero',()=>{const r=S.build(base(),details,[{athleteId:'a',event:'Broken 200m',segments:[{distance:120,rest:0},{distance:80}]}],id());assert.equal(r.data.sessions[0].efforts[0].runningTime,null);});
 test('broken wrong total, missing rest, negative rest and too many segments rejected',()=>{const bad=[[{distance:100,rest:30},{distance:50}],[{distance:100},{distance:100}],[{distance:100,rest:-1},{distance:100}],Array.from({length:5},()=>({distance:40,rest:30}))];for(const segments of bad)assert.throws(()=>S.build(base(),details,[{athleteId:'a',event:'Broken 200m',segments}],id()));});
 test('invalid wicket count/spacing, sled distance and rest rejected',()=>{for(const rep of [{athleteId:'a',event:'Wicket run',wicketCount:1,spacing:6},{athleteId:'a',event:'Wicket run',wicketCount:3.5,spacing:6},{athleteId:'a',event:'Wicket run',wicketCount:10,spacing:0},{athleteId:'a',event:'Sled push',distance:''},{athleteId:'a',event:'500m',time:80,restAfter:-1}])assert.throws(()=>S.build(base(),details,[rep],id()));});
+test('400 the hard way saves seven runs with six walk-backs and no race results',()=>{
+ const segments=Array.from({length:7},()=>({time:15,walkBackTime:45}));
+ const r=S.build(base(),details,[{athleteId:'a',event:'400 the hard way',segments,restAfter:300}],id());
+ const e=r.data.sessions[0].efforts[0];
+ assert.equal(e.runningDistance,700);assert.equal(e.walkingDistance,300);assert.equal(e.distance,400);assert.equal(e.runningTime,105);
+ assert.equal(e.segments.reduce((n,p)=>n+p.distance-p.walkBackDistance,0),400);
+ assert.equal(e.segments[6].walkBackDistance,0);assert.equal(e.segments[6].walkBackTime,null);
+ assert.equal(r.records,0);assert.equal(V.savedBest(r.data.results,'a','400m'),null);
+ assert.deepEqual(V.validateData(JSON.parse(JSON.stringify(r.data))),r.data);
+});
+test('hard-way untimed runs survive backups and partial times do not create a total',()=>{
+ for(const segments of [Array.from({length:7},()=>({})),Array.from({length:7},(_,i)=>({time:i?15:'',walkBackTime:0}))]){
+  const r=S.build(base(),details,[{athleteId:'a',event:'400 the hard way',segments}],id());
+  assert.equal(r.data.sessions[0].efforts[0].runningTime,null);V.validateData(JSON.parse(JSON.stringify(r.data)));
+ }
+});
+test('hard-way invalid times, incomplete structure and corrupt backup totals are rejected',()=>{
+ const rep={athleteId:'a',event:'400 the hard way',segments:Array.from({length:7},()=>({time:15,walkBackTime:45}))};
+ for(const segments of [rep.segments.slice(1),rep.segments.map((p,i)=>i?p:{time:-1}),rep.segments.map((p,i)=>i?p:{walkBackTime:-1})])assert.throws(()=>S.build(base(),details,[{...rep,segments}],id()));
+ const r=S.build(base(),details,[rep],id());
+ for(const key of ['distance','runningDistance','walkingDistance','runningTime']){const bad=JSON.parse(JSON.stringify(r.data));bad.sessions[0].efforts[0][key]++;assert.throws(()=>V.validateData(bad));}
+ const bad=JSON.parse(JSON.stringify(r.data));bad.sessions[0].efforts[0].segments[6].walkBackDistance=50;assert.throws(()=>V.validateData(bad));
+});

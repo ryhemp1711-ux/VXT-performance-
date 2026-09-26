@@ -103,3 +103,9 @@ Training sessions now includes continuous 250m, 300m, 350m, 450m and 500m runs; 
 The session form uses explicit validation with visible save status instead of native browser validation that can stop submission before feedback. Successful saves clear entries only after the local commit succeeds, then open the saved summary. Empty-name, invalid splits, missing athletes and incorrect broken totals retain the form with errors. A normal Results entry alone does not create a training session. New session effort metadata retains drills without timed results and survives JSON backups and cloud transfers; no database migration is required. Refresh both devices to v0.7 before transferring new distances. Athlete deletion also removes associated stored efforts.
 
 Validation: 38 tests pass, plus DOM save-button checks for field errors, wrong-total rejection without partial writes, drill persistence after reload, automatic opening of the saved summary, and athlete deletion.
+
+## v0.8: 400 the hard way
+
+Choose **400 the hard way** in Training sessions. Run 100m, walk back 50m and repeat until reaching the end of the 400m lap: seven 100m runs, six 50m walk-backs, 700m total running and 300m walking. There is no walk-back after the final run. One session entry records the full workout, with optional individual run and walk-back times, optional rest after the workout and notes. Running time appears only when all seven runs are timed and excludes walking. This drill never becomes a continuous 400m result or predictor input.
+
+The fixed structure, optional times and totals survive reloads, JSON backups and manual cloud transfers. Refresh both devices to v0.8 before transferring this drill; older clients reject the new effort type. No database migration is required.

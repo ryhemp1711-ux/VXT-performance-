@@ -25,6 +25,13 @@
   const span=document.createElement('p');span.className='muted';wickets.append(span);
   wickets.addEventListener('input',()=>{const count=Number(field(row,'wicketCount').value),spacing=Number(field(row,'spacing').value),factor=field(row,'spacingUnit').value==='ft'?.3048:1;span.textContent=count>=2&&spacing>0?`First-to-last wicket span: ${((count-1)*spacing*factor).toFixed(2)}m. Run-in and run-out are separate; this is not automatically a flying split.`:'Enter uniform spacing. For 6 ft 9 in, enter 6.75 ft.';});
   span.textContent='Enter uniform spacing. For 6 ft 9 in, enter 6.75 ft. Run-in is not included in the wicket span.';
+  const hard=document.createElement('div');row.append(hard);
+  const hardInstructions=document.createElement('p');hardInstructions.textContent='Run 100m, walk back 50m, repeat until you reach the end of the 400m lap. Seven 100m runs and six 50m walk-backs: 700m running, 300m walking. No walk-back after run 7. Times are optional; running time excludes walking. This is not a continuous 400m result.';hard.append(hardInstructions);
+  for(let i=0;i<7;i++){
+   const part=document.createElement('fieldset');part.className='session-segment';const title=document.createElement('legend');title.textContent='Run '+(i+1)+' — 100m (finish at '+(100+i*50)+'m)';part.append(title);hard.append(part);
+   control('Run time (seconds, optional)','hardTime'+i,'number',part);
+   if(i<6)control('50m walk-back time (seconds, optional)','hardWalk'+i,'number',part);
+  }
   const broken=document.createElement('div');row.append(broken);
   const instructions=document.createElement('p');instructions.textContent='Enter 2–4 segments in order. Rest is in seconds (90 = 1:30). Segment times are optional; their sum excludes rest and is not a continuous race result.';broken.append(instructions);
   for(let i=0;i<4;i++){
@@ -40,7 +47,8 @@
   function showGroup(group,show){group.hidden=!show;group.querySelectorAll('input,select').forEach(i=>i.disabled=!show);}
   function adjust(){
    const race=VXTSessions.raceEvents.includes(event.value),fly=event.value.startsWith('Fly '),distance=Number(event.value.replace(/\D/g,'')),isBroken=event.value.startsWith('Broken ');
-   total.disabled=isBroken;total.parentElement.hidden=isBroken;
+   const isHard=event.value==='400 the hard way';
+   total.disabled=isBroken||isHard;total.parentElement.hidden=total.disabled;showGroup(hard,isHard);
    showGroup(sled,event.value==='Sled push');showGroup(wickets,event.value==='Wicket run');showGroup(broken,isBroken);
    for(const d of [10,20,30,60]){const input=field(row,'split'+d);input.disabled=!race||fly||d>=distance;input.parentElement.hidden=input.disabled;}intro.hidden=!race||fly;
    if(isBroken)updateSum();
@@ -63,7 +71,8 @@
    const notes=document.createElement('p');notes.textContent=[session.method,session.notes].filter(Boolean).join(' · ');section.append(notes);
    for(const effort of entries){
     const athlete=data.athletes.find(a=>a.id===effort.athleteId);let detail='';
-    if(effort.event==='Sled push')detail=`${effort.distance}m · time ${seconds(effort.time)}`+(effort.load==null?'':` · load ${effort.load} ${effort.loadUnit}`);
+    if(effort.event==='400 the hard way')detail='400m net progress · 700m running · 300m walking · '+effort.segments.map((p,i)=>`run ${i+1}: 100m ${seconds(p.time)}${i<6?' → walk back 50m'+(p.walkBackTime==null?'':' in '+seconds(p.walkBackTime)):''}`).join(' · ')+(effort.runningTime==null?'':` · running time ${seconds(effort.runningTime)} (walking excluded)`);
+    else if(effort.event==='Sled push')detail=`${effort.distance}m · time ${seconds(effort.time)}`+(effort.load==null?'':` · load ${effort.load} ${effort.loadUnit}`);
     else if(effort.event==='Wicket run')detail=`${effort.wicketCount} wickets · ${effort.spacing} ${effort.spacingUnit} apart · span ${effort.wicketSpanMeters.toFixed(2)}m · time ${seconds(effort.time)}`;
     else if(effort.event.startsWith('Broken '))detail=effort.segments.map((p,i)=>`${p.distance}m${p.time==null?'':' in '+seconds(p.time)}${i<effort.segments.length-1?' → rest '+p.rest+'s →':''}`).join(' ')+` · total ${effort.distance}m`+(effort.runningTime==null?'':` · running time ${seconds(effort.runningTime)} (rest excluded)`);
     else{const group=groups.get(effort.id)||[];group.sort((a,b)=>Number(a.event.replace(/\D/g,''))-Number(b.event.replace(/\D/g,'')));detail=group.length?group.map(r=>`${r.event} ${r.time.toFixed(2)}s${r.isSplit?' (split)':''}`).join(' · '):'Result records removed';}
@@ -81,6 +90,7 @@
    const reps=[...el('session-reps').children].map((row,index)=>{
     const v=name=>field(row,name)?.value||'';
     const rep={athleteId:v('athleteId'),event:v('event'),time:v('time'),notes:v('notes'),restAfter:v('restAfter'),distance:v('distance'),load:v('load'),loadUnit:v('loadUnit'),wicketCount:v('wicketCount'),spacing:v('spacing'),spacingUnit:v('spacingUnit'),splits:Object.fromEntries([10,20,30,60].filter(d=>!field(row,'split'+d).disabled).map(d=>[d,v('split'+d)]))};
+    if(rep.event==='400 the hard way')rep.segments=Array.from({length:7},(_,i)=>({time:v('hardTime'+i),walkBackTime:i<6?v('hardWalk'+i):''}));
     if(rep.event.startsWith('Broken ')){
      rep.segments=[];let gap=false;for(let i=0;i<4;i++){
       if(!v('partDistance'+i)){gap=true;if(v('partTime'+i)||(!field(row,'partRest'+i)?.disabled&&v('partRest'+i)))throw Error(`Row ${index+1}: segment ${i+1} needs a distance.`);continue;}

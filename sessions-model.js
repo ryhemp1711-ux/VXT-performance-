@@ -2,7 +2,7 @@
 'use strict';
 const V=typeof module!=='undefined'&&module.exports?require('./model.js'):root.VXT;
 const raceEvents=['10m','20m','30m','55m','60m','100m','150m','200m','250m','300m','350m','400m','450m','500m','Fly 10m','Fly 20m','Fly 30m'];
-const events=[...raceEvents,'Sled push','Wicket run','Broken 200m','Broken 300m','Broken 400m'];
+const events=[...raceEvents,'Sled push','Wicket run','400 the hard way','Broken 200m','Broken 300m','Broken 400m'];
 const optional=(v)=>v==null||String(v).trim()==='';
 function number(v,label,{min=0,max=3600,required=false,integer=false}={}){
  if(optional(v)){if(required)throw Error(label+' is required.');return null;}
@@ -24,6 +24,13 @@ function build(data,details,reps,newId){
   const repId=newId(),repNumber=(counts.get(rep.athleteId)||0)+1;counts.set(rep.athleteId,repNumber);
   const effort={id:repId,athleteId:rep.athleteId,repNumber,event:rep.event,notes:String(rep.notes||'').trim(),restAfter:number(rep.restAfter,prefix+'rest after rep (seconds)',{max:86400})};
   if(effort.notes.length>500)throw Error(prefix+'rep notes must be 500 characters or fewer.');
+  if(rep.event==='400 the hard way'){
+   if(!Array.isArray(rep.segments)||rep.segments.length!==7)throw Error(prefix+'enter seven 100m runs.');
+   effort.distance=400;effort.runningDistance=700;effort.walkingDistance=300;
+   effort.segments=rep.segments.map((part,i)=>({distance:100,time:number(part.time,prefix+`run ${i+1} time`,{min:.01}),walkBackDistance:i<6?50:0,walkBackTime:i<6?number(part.walkBackTime,prefix+`walk-back ${i+1} time`,{max:86400}):null}));
+   effort.runningTime=effort.segments.every(p=>p.time!==null)?effort.segments.reduce((n,p)=>n+p.time,0):null;
+   efforts.push(effort);continue;
+  }
   if(rep.event.startsWith('Broken ')){
    const total=Number(rep.event.replace(/\D/g,''));
    if(!Array.isArray(rep.segments)||rep.segments.length<2||rep.segments.length>4)throw Error(prefix+'enter 2 to 4 broken-run segments.');
