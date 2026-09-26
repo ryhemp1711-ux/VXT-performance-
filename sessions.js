@@ -136,7 +136,7 @@
    status(`Saved ${result.reps} reps for ${result.athletes} athletes. See the expanded session below. ${result.records} continuous finish times and splits added to Results. Upload to cloud for your other device.`);
   }catch(error){status(error.message,true);}finally{save.disabled=false;}
  });
- document.querySelector('[data-tab="sessions"]').addEventListener('click',()=>{
+ document.querySelectorAll('[data-tab="sessions"]').forEach(button=>button.addEventListener('click',()=>{
   try{for(const row of el('session-reps').children){const s=field(row,'athleteId');fillAthletes(s,s.value);}if(!el('session-reps').children.length)addRep();history();}catch(e){status(e.message,true);}
- });
+ }));
 })();

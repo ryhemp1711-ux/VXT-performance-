@@ -129,3 +129,7 @@ Blocks persist in the existing local workspace and JSON backups/manual cloud tra
 Use Team training to write one shared workout and assign it to multiple roster athletes in a single save. Select all or choose individuals; enter the workout date, detailed prescription and optional notes. Each athlete starts as planned and has a separate completion checkbox. Edits update the shared assignment. Changing the prescription or date resets completion; adding athletes alone preserves existing completion and starts new assignments as planned. Cancel discards unsaved edits.
 
 Assignments and completion persist in local storage, backups and manual cloud transfers. Athlete deletion removes only their assignments, preserving the workout for remaining athletes (or for later reassignment). Older backups remain valid. These plans and completion flags create no measured results or predictor inputs; record actual times in Training sessions. Refresh both devices to v0.11. No database migration is needed.
+
+## v0.11.1 — Grouped training navigation
+
+Open Training sessions for Session log, Training blocks, and Team training. The three sections share a secondary navigation bar; existing saved data and forms are retained when switching sections.

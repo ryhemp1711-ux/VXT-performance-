@@ -11,7 +11,17 @@ try{const raw=localStorage.getItem(key);if(raw)data=VXT.validateData(JSON.parse(
 function commit(next,restoring=false){try{if(storageBlocked&&!restoring)throw Error('Restore a valid backup before adding records.');next=VXT.validateData(next);localStorage.setItem(key,JSON.stringify(next));data=next;storageBlocked=false;render();return true;}catch(e){message('Not saved: '+e.message,true);return false;}}
 function selected(){if(!active){message('Add or select an athlete first.',true);return false;}return true;}
 function table(headers,rows){return rows.length?'<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<p class="empty">No records yet.</p>';}
-function tab(id){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('#page-title').textContent={dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync',screenshot:'Import screenshot',sessions:'Training sessions',blocks:'Training blocks',team:'Team training'}[id];}
+function tab(id){
+ const training=['sessions','blocks','team'].includes(id);
+ document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);
+ $('#training-nav').hidden=!training;
+ document.querySelectorAll('nav button').forEach(b=>{
+  const selected=b.closest('#training-nav')?b.dataset.tab===id:b.dataset.tab===(training?'sessions':id);
+  b.classList.toggle('active',selected);
+  if(selected)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
+ });
+ $('#page-title').textContent=training?'Training sessions':{dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync',screenshot:'Import screenshot'}[id];
+}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{tab(b.dataset.tab);if(b.dataset.tab==='predictor')predictorFields();}));
 function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
 try{localStorage.setItem(activeKey,active);}catch{message('Athlete selection could not be remembered.',true);}
