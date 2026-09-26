@@ -23,7 +23,7 @@ function build(data,input,newId){
  const linked=(data.sessions||[]).filter(s=>s.sourceWorkoutId===existing?.id&&s.sourceWorkoutId);
  if(linked.length&&(existing.date!==date||existing.workout!==workout||JSON.stringify(existing.prescription)!==JSON.stringify(prescription)||linked.some(s=>s.efforts.some(e=>!ids.includes(e.athleteId)))))throw Error('This workout has linked results. Keep its date, prescription and logged athletes, or delete its linked sessions before changing them.');
  const changed=existing&&(existing.workout!==workout||existing.date!==date);
- const assignments=ids.map(athleteId=>({...existing?.assignments.find(a=>a.athleteId===athleteId),athleteId,completed:!changed&&(existing?.assignments.find(a=>a.athleteId===athleteId)?.completed||false)}));
+ const assignments=ids.map(athleteId=>({...existing?.assignments.find(a=>a.athleteId===athleteId),athleteId,...(input.targets&&Object.hasOwn(input.targets,athleteId)?{target:String(input.targets[athleteId]).trim()}:{}),completed:!changed&&(existing?.assignments.find(a=>a.athleteId===athleteId)?.completed||false)}));
  const record={id:existing?.id||newId(),name,date,startTime,workout,notes,assignments,...(prescription?{prescription}: {})};const workouts=existing?data.teamWorkouts.map(w=>w.id===existing.id?record:w):[...(data.teamWorkouts||[]),record];
  return {data:V.validateData({...data,teamWorkouts:workouts}),workoutId:record.id,assignedCount:ids.length,skippedCount:input.athleteIds.length-ids.length};
 }

@@ -8,19 +8,17 @@ const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+Math.ra
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 try{const raw=localStorage.getItem(key);if(raw)data=VXT.validateData(JSON.parse(raw));}catch(e){storageBlocked=true;message('Saved data could not be read. It has not been overwritten. Restore a valid backup to continue, or export any visible records. '+e.message,true);}
-function commit(next,restoring=false){try{if(storageBlocked&&!restoring)throw Error('Restore a valid backup before adding records.');next=VXT.validateData(next);localStorage.setItem(key,JSON.stringify(next));data=next;storageBlocked=false;render();return true;}catch(e){message('Not saved: '+e.message,true);return false;}}
+function commit(next,restoring=false){try{if(storageBlocked&&!restoring)throw Error('Restore a valid backup before adding records.');next=VXT.validateData(next);localStorage.setItem(key,JSON.stringify(next));const previous=data;data=next;globalThis.VXTUX?.recordCommit(previous,next);storageBlocked=false;render();return true;}catch(e){message('Not saved: '+e.message,true);return false;}}
 function selected(){if(!active){message('Add or select an athlete first.',true);return false;}return true;}
 function table(headers,rows){return rows.length?'<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<p class="empty">No records yet.</p>';}
 function tab(id){
- const training=['sessions','blocks','team','calendar','templates','groups'].includes(id);
+ const training=['sessions','blocks','team','templates','practice'].includes(id),athletes=['dashboard','results','groups','screenshot'].includes(id),reports=['reports','predictor'].includes(id);
  document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);
- $('#training-nav').hidden=!training;
- document.querySelectorAll('nav button').forEach(b=>{
-  const selected=b.closest('#training-nav')?b.dataset.tab===id:b.dataset.tab===(training?'sessions':id);
-  b.classList.toggle('active',selected);
-  if(selected)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
- });
- $('#page-title').textContent=training?'Training sessions':{dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync',screenshot:'Import screenshot',reports:'Athlete reports'}[id];
+ $('#training-nav').hidden=!training;$('#athlete-nav').hidden=!athletes;$('#report-nav').hidden=!reports;
+ const area=training?'training':athletes?'athletes':reports?'reports':id==='calendar'?'today':'';
+ document.querySelectorAll('nav button').forEach(b=>{const selected=b.dataset.main?b.dataset.main===area:b.dataset.tab===id;b.classList.toggle('active',selected);if(selected)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+ $('#page-title').textContent={calendar:'Today',dashboard:'Athletes',results:'Results',groups:'Training groups',screenshot:'Import screenshot',team:'Plan a workout',sessions:'Session log',blocks:'Training blocks',templates:'Workout templates',practice:'Practice mode',reports:'Athlete reports',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync'}[id];
+ document.dispatchEvent(new CustomEvent('vxt-tab',{detail:id}));
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{tab(b.dataset.tab);if(b.dataset.tab==='predictor')predictorFields();}));
 function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
@@ -93,7 +91,7 @@ $('#predict-form').addEventListener('input',()=>{latest=null;$('#save-prediction
 $('#predict-form').addEventListener('submit',e=>{e.preventDefault();try{const input=Object.fromEntries(new FormData(e.target));latest={...VXT.predict(input.event,input),input};$('#prediction-output').innerHTML='<div class="estimate">'+latest.center.toFixed(2)+'<small> s</small></div><h2>'+esc(latest.event)+' estimate</h2><p>'+esc(latest.detail)+'</p>';$('#save-prediction').hidden=false;message('Estimate calculated.');}catch(err){latest=null;$('#save-prediction').hidden=true;message(err.message,true);}});
 $('#save-prediction').addEventListener('click',()=>{if(!selected()||!latest)return;if(commit({...data,predictions:[...data.predictions,{id:uid(),athleteId:active,event:latest.event,time:latest.center,date:today(),model:latest.model,inputs:latest.input}]})){latest=null;$('#save-prediction').hidden=true;message('Estimate saved to the active athlete.');}});
 $('#export').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='vxt-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Backup download started.');});
-$('#import').addEventListener('click',async()=>{const f=$('#import-file').files[0];if(!f||!$('#confirm-import').checked){message('Choose a backup and check the replacement confirmation.',true);return;}if(f.size>20*1024*1024){message('Backup must be under 20 MB.',true);return;}try{const next=VXT.validateData(JSON.parse(await f.text()));if(commit(next,true)){resetResultForm();predictorFields();$('#confirm-import').checked=false;$('#import-file').value='';message('Backup restored.');}}catch(e){message('Import failed; existing records kept. '+e.message,true);}});
+$('#import').addEventListener('click',async()=>{const f=$('#import-file').files[0];if(!f||!$('#confirm-import').checked){message('Choose a backup and check the replacement confirmation.',true);return;}if(f.size>20*1024*1024){message('Backup must be under 20 MB.',true);return;}try{const next=VXT.validateData(JSON.parse(await f.text()));if(commit(next,true)){resetResultForm();predictorFields();$('#confirm-import').checked=false;$('#import-file').value='';document.dispatchEvent(new Event('vxt-workspace-replaced'));message('Backup restored.');}}catch(e){message('Import failed; existing records kept. '+e.message,true);}});
 $('#demo').addEventListener('click',()=>{const id=uid(),dates=[21,14,7].map(days=>{const d=new Date();d.setDate(d.getDate()-days);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});if(commit({...data,athletes:[...data.athletes,{id,name:'Demo sprinter (fictional)'}],results:[...data.results,...[12.65,12.48,12.32].map((time,i)=>({id:uid(),athleteId:id,event:'100m',time,date:dates[i],method:'FAT',notes:'Fictional demonstration result'}))]})){chooseAthlete(id);tab('dashboard');message('Fictional demo athlete added.');}});
 render();predictorFields();
 
@@ -107,7 +105,7 @@ globalThis.VXTLocal={
   const raw=localStorage.getItem(key);
   if(raw)localStorage.setItem(key+'-cloud-recovery',raw);
   if(!commit(next,true))throw Error('Cloud records could not be saved locally. Existing records were kept.');
-  resetResultForm();predictorFields();
+  document.dispatchEvent(new Event('vxt-workspace-replaced'));resetResultForm();predictorFields();
  },
  exportSafetyCopy(){
   const raw=localStorage.getItem(key+'-cloud-recovery');if(!raw)throw Error('No recovery copy yet. A copy is saved before replacing records.');

@@ -159,3 +159,19 @@ Training sessions now includes Calendar, Templates and Groups alongside Session 
 - Athlete reports show personal bests grouped by timing method, first/latest dated performance, training/attendance, individual targets, readiness and saved coach notes. Print/Save PDF through the browser or download a standalone HTML report to share. Positive improvement means faster. Season-only results are excluded from dated trends. No validated readiness score or race prediction is inferred.
 
 All additions are included in JSON backup and existing manual cloud transfers. Update both devices before changing these records. Existing backups without the new fields remain supported. Automated suite: 75 tests. Live Supabase auth/RLS and two-device verification remain separate deployment prerequisites.
+
+## v0.14 — Faster practice workflows
+
+The app opens on Today, showing the weekly calendar and Plan workout / Start practice / Review results actions. Four main areas replace the long menu: Today, Athletes (roster, results, groups, screenshot import), Training (session log, workout planning, blocks, templates, Practice mode), and Reports (athlete reports, predictor). Backup and cloud transfer controls are under Settings.
+
+Workout planning uses three steps: Workout, Athletes, Schedule. Individual targets can be entered before assignment. Optional notes are collapsed. Conflict lists offer Skip athlete and Open existing record buttons, plus the explicit Keep both choice. Start times still do not bypass same-day checks.
+
+Practice mode opens a shared workout with attendance and an athlete-by-rep timing grid for continuous/flying runs. Attendance is saved immediately; rep times are autosaved as a draft on this device. Finish & save timed results creates linked results atomically. Blank reps are omitted; athletes with saved times become complete. Skipped athletes’ entered times remain in the practice draft. Absent/already-logged athletes cannot receive duplicate results. A changed prescription invalidates an old timing draft. Drill workouts use the existing detailed session log, with draft saving, for distances, tempo, wickets and broken-run fields.
+
+Unfinished session logs (including dynamic drill fields), workout plans, blocks, groups and templates are autosaved locally and restored after reload. Each form shows its draft status and an explicit discard action. Drafts are separate from completed records and are not included in cloud uploads or JSON backups. Replacing the workspace by import or cloud download clears old drafts. Storage failures are shown instead of claiming success. Do not clear browser data if you need unfinished drafts.
+
+The latest deletion has an Undo action, saved on this device when storage permits. Undo restores affected records and links without replacing unrelated subsequent records. It refuses to overwrite an affected record that has since changed. A later deletion replaces the previous undo point. Replacement imports/cloud downloads clear undo.
+
+Phone controls have larger touch targets, decimal keyboards for rep times, wrapping navigation, and a sticky Practice mode finish action. Wide rep grids scroll horizontally while keeping athlete names visible.
+
+Automated suite: 83 tests, covering backward compatibility, drafts, storage errors, linked sessions, prescription changes, targets, safe deletion restoration and later-edit conflicts. Supabase auth/RLS and two-device verification remain separate prerequisites.

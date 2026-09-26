@@ -8,7 +8,7 @@
   if(!el('session-date').value)return;
   const data=VXTLocal.snapshot(),ids=[...el('session-reps').querySelectorAll('[data-field="athleteId"]')].map(i=>i.value).filter(Boolean);
   const overlaps=VXT.schedulingConflicts(data,{date:el('session-date').value,excludeTeamId:sourceWorkoutId,athleteIds:ids});el('session-conflicts').hidden=!overlaps.length;
-  for(const c of overlaps){const li=document.createElement('li');li.textContent=data.athletes.find(a=>a.id===c.athleteId)?.name+': '+[...c.blocks.map(b=>b.name+' (block '+VXT.formatDate(b.startDate)+' – '+VXT.formatDate(b.endDate)+')'),...c.workouts.map(w=>w.name+' (team workout, '+VXT.formatStartTime(w.startTime)+')'),...c.sessions.map(s=>s.name+' (saved session, '+VXT.formatStartTime(s.startTime)+')')].join('; ');el('session-conflict-list').append(li);}
+  for(const c of overlaps){const li=document.createElement('li');li.textContent=data.athletes.find(a=>a.id===c.athleteId)?.name+': '+[...c.blocks.map(b=>b.name+' (block '+VXT.formatDate(b.startDate)+' – '+VXT.formatDate(b.endDate)+')'),...c.workouts.map(w=>w.name+' (team workout, '+VXT.formatStartTime(w.startTime)+')'),...c.sessions.map(s=>s.name+' (saved session, '+VXT.formatStartTime(s.startTime)+')')].join('; ');el('session-conflict-list').append(li);if(globalThis.VXTUX)VXTUX.conflictActions(li,c,()=>{for(const row of [...el('session-reps').children])if(field(row,'athleteId').value===c.athleteId)row.remove();previewConflicts();document.dispatchEvent(new CustomEvent('vxt-draft-change',{detail:'sessions'}));});}
  }
  el('session-date').addEventListener('change',()=>{try{previewConflicts();}catch(e){status(e.message,true);}});
  el('session-reps').addEventListener('change',e=>{if(e.target.dataset.field==='athleteId')previewConflicts();});
@@ -149,6 +149,7 @@
    // Confirm durable local storage before clearing the entry form.
    if(!VXTLocal.snapshot().sessions?.some(s=>s.id===result.sessionId))throw Error('Session was not saved. Keep this page open and try again.');
    el('session-reps').replaceChildren();rowNumber=0;el('session-name').value='';el('session-notes').value='';el('session-start-time').value='';sourceWorkoutId=null;el('session-source').hidden=true;el('session-unlink').hidden=true;previewConflicts();history(result.sessionId);
+   document.dispatchEvent(new CustomEvent('vxt-clear-draft',{detail:'sessions'}));
    status(`${result.skipped?result.skipped+' conflicting athletes skipped. ':''}Saved ${result.reps} reps for ${result.athletes} athletes. See the expanded session below. ${result.records} continuous finish times and splits added to Results. Upload to cloud for your other device.`);
   }catch(error){status(error.message,true);}finally{save.disabled=false;}
  });
@@ -161,7 +162,7 @@
    const count=w.prescription?.reps||1;if(count*assignments.length>500)throw Error('This workout exceeds 500 rep entries. Log a smaller group.');
    sourceWorkoutId=id;document.querySelector('[data-tab="sessions"]').click();el('session-reps').replaceChildren();rowNumber=0;el('session-name').value=w.name;el('session-date').value=w.date;el('session-start-time').value=w.startTime||'';el('session-notes').value='';
    el('session-source').textContent='Linked workout: '+w.workout+' — '+assignments.map(a=>(data.athletes.find(x=>x.id===a.athleteId)?.name||'Athlete')+(a.target?': '+a.target:'')).join('; ');el('session-source').hidden=false;el('session-unlink').hidden=false;
-   for(const a of assignments)for(let i=0;i<count;i++)addRep({athleteId:a.athleteId,event:w.prescription?.event||'60m',restAfter:w.prescription?.restAfter});previewConflicts();status('Planned workout loaded. Enter measured times and drill details. Targets are not measured results.');
+   for(const a of assignments)for(let i=0;i<count;i++)addRep({athleteId:a.athleteId,event:w.prescription?.event||'60m',restAfter:w.prescription?.restAfter});previewConflicts();document.dispatchEvent(new CustomEvent('vxt-draft-change',{detail:'sessions'}));status('Planned workout loaded. Enter measured times and drill details. Targets are not measured results.');
   }catch(e){const node=el('team-status');node.textContent=e.message;node.className='error';node.scrollIntoView?.({block:'center'});}
  }
  document.addEventListener('vxt-log-workout',e=>{
@@ -174,4 +175,17 @@
  document.querySelectorAll('[data-tab="sessions"]').forEach(button=>button.addEventListener('click',()=>{
   try{for(const row of el('session-reps').children){const s=field(row,'athleteId');fillAthletes(s,s.value);}if(!el('session-reps').children.length)addRep();previewConflicts();history();}catch(e){status(e.message,true);}
  }));
+
+ (globalThis.VXTEditors ||= {}).sessions={form:'session-form',capture(){return {sourceWorkoutId,fields:Object.fromEntries(['session-name','session-date','session-start-time','session-method','session-notes'].map(id=>[id,el(id).value])),rows:[...el('session-reps').children].map(row=>Object.fromEntries([...row.querySelectorAll('[data-field]')].map(i=>[i.dataset.field,i.value])))};},restore(d){
+  if(!d.fields||!Array.isArray(d.rows)||d.rows.length>500)throw Error('Session draft is invalid.');
+  if(d.sourceWorkoutId&&!VXTLocal.snapshot().teamWorkouts?.some(w=>w.id===d.sourceWorkoutId))throw Error('Draft links to a deleted workout. Discard this draft or undo the deletion.');
+  sourceWorkoutId=d.sourceWorkoutId||null;for(const id of ['session-name','session-date','session-start-time','session-method','session-notes'])if(typeof d.fields[id]==='string')el(id).value=d.fields[id];
+  el('session-reps').replaceChildren();rowNumber=0;
+  for(const saved of d.rows){addRep({athleteId:saved.athleteId,event:saved.event});const row=el('session-reps').lastElementChild;
+   for(const name of ['tempoSets','tempoReps','tempoDistance'])if(saved[name]!=null)field(row,name).value=saved[name];if(saved.event==='Tempo')field(row,'tempoSets').dispatchEvent(new Event('input',{bubbles:true}));
+   for(const [name,value] of Object.entries(saved)){const control=field(row,name);if(control&&typeof value==='string')control.value=value;}field(row,'event').dispatchEvent(new Event('change',{bubbles:true}));
+  }
+  el('session-source').hidden=!sourceWorkoutId;el('session-unlink').hidden=!sourceWorkoutId;if(sourceWorkoutId)el('session-source').textContent='Restored linked workout: '+VXTLocal.snapshot().teamWorkouts.find(w=>w.id===sourceWorkoutId).workout;previewConflicts();
+ },discard(){sourceWorkoutId=null;el('session-form').reset();el('session-date').value=today();el('session-reps').replaceChildren();rowNumber=0;addRep();el('session-source').hidden=true;el('session-unlink').hidden=true;previewConflicts();}};
+
 })();
