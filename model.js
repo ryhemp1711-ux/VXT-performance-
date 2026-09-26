@@ -32,6 +32,20 @@ function formatDate(value){const date=normalizeDate(value);return date.length===
 function savedBest(results,athleteId,event,method='All'){
  return results.filter(r=>r.athleteId===athleteId&&r.event===event&&(method==='All'||(r.method||'Unknown')===method)).sort((a,b)=>a.time-b.time||b.date.localeCompare(a.date))[0]||null;
 }
+function startTime(value){
+ if(value==null||value==='')return '';
+ if(typeof value!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))throw Error('Enter a valid start time (HH:MM).');
+ return value;
+}
+function formatStartTime(value){if(!value)return 'Time not set';const [h,m]=value.split(':');return ((Number(h)%12)||12)+':'+m+' '+(Number(h)<12?'AM':'PM');}
+function schedulingConflicts(data,input){
+ const date=normalizeDate(input.date);if(date.length!==10)throw Error('Choose an exact session date.');
+ return [...new Set(input.athleteIds||[])].map(athleteId=>({athleteId,
+  blocks:(data.trainingBlocks||[]).filter(b=>b.athleteIds.includes(athleteId)&&b.startDate<=date&&date<=b.endDate),
+  workouts:(data.teamWorkouts||[]).filter(w=>w.id!==input.excludeTeamId&&w.date===date&&w.assignments.some(a=>a.athleteId===athleteId)),
+  sessions:(data.sessions||[]).filter(s=>s.id!==input.excludeSessionId&&s.date===date&&((s.efforts||[]).some(e=>e.athleteId===athleteId)||data.results.some(r=>r.sessionId===s.id&&r.athleteId===athleteId)))
+ })).filter(c=>c.blocks.length||c.workouts.length||c.sessions.length);
+}
 function validateData(data){
  if(!data||data.version!==1||!Array.isArray(data.athletes)||!Array.isArray(data.results)||!Array.isArray(data.predictions))throw Error('Not a VXT version 1 backup.');
  if(data.athletes.length>5000||data.results.length>100000||data.predictions.length>100000)throw Error('Backup is too large.');
@@ -40,6 +54,7 @@ function validateData(data){
   if(!Array.isArray(data.teamWorkouts)||data.teamWorkouts.length>5000)throw Error('Invalid team workouts.');
   const workoutIds=new Set();for(const w of data.teamWorkouts){
    if(!w||typeof w.id!=='string'||!w.id||workoutIds.has(w.id)||typeof w.name!=='string'||!w.name.trim()||w.name.length>100||typeof w.date!=='string'||w.date.length!==10||normalizeDate(w.date)!==w.date||typeof w.workout!=='string'||!w.workout.trim()||w.workout.length>10000||typeof w.notes!=='string'||w.notes.length>2000||!Array.isArray(w.assignments)||w.assignments.length>5000)throw Error('Invalid team workout.');
+   startTime(w.startTime);
    const assigned=new Set();for(const a of w.assignments){if(!a||!ids.has(a.athleteId)||assigned.has(a.athleteId)||typeof a.completed!=='boolean')throw Error('Invalid team workout assignment.');assigned.add(a.athleteId);}workoutIds.add(w.id);
   }
  }
@@ -61,6 +76,7 @@ function validateData(data){
   if(!Array.isArray(data.sessions)||data.sessions.length>10000)throw Error('Invalid sessions.');
   for(const session of data.sessions){
    if(!session||typeof session.id!=='string'||!session.id||sessionIds.has(session.id)||typeof session.name!=='string'||!session.name.trim()||session.name.length>100||typeof session.notes!=='string'||session.notes.length>1000||!['Video','Gates','FAT','Hand','Unknown'].includes(session.method)||normalizeDate(session.date)!==session.date||session.date.length!==10)throw Error('Invalid training session.');
+   startTime(session.startTime);
    if(session.efforts!=null){
     if(!Array.isArray(session.efforts)||session.efforts.length>500)throw Error('Invalid session efforts.');
     const effortsSeen=new Set(),validNumber=(n,min=0,max=86400)=>typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max;
@@ -95,5 +111,5 @@ function validateData(data){
  const seen=new Set();for(const r of [...normalized.results,...normalized.predictions]){if(!r||typeof r.id!=='string'||!r.id||seen.has(r.id)||!ids.has(r.athleteId)||!['10m','20m','30m','55m','60m','100m','150m','200m','250m','300m','350m','400m','450m','500m','Fly 10m','Fly 20m','Fly 30m'].includes(r.event)||typeof r.time!=='number'||!Number.isFinite(r.time)||r.time<=0||!/^(?:19|20)\d{2}(?:-\d{2}-\d{2})?$/.test(r.date)||!Number.isFinite(Date.parse(r.date)))throw Error('Invalid performance record.');seen.add(r.id);if(r.notes!=null&&(typeof r.notes!=='string'||r.notes.length>1000))throw Error('Invalid notes.');if(r.method!=null&&!['FAT','Gates','Hand','Video','Unknown'].includes(r.method))throw Error('Invalid timing method.');}
  return changed?normalized:data;
 }
-const api={predict,validateData,normalizeDate,formatDate,savedBest};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXT=api;
+const api={startTime,formatStartTime,schedulingConflicts,predict,validateData,normalizeDate,formatDate,savedBest};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXT=api;
 })(globalThis);

@@ -137,3 +137,11 @@ Open Training sessions for Session log, Training blocks, and Team training. The 
 ## v0.11.2 — Team scheduling conflicts
 
 Team training checks selected athletes against explicitly assigned training blocks (inclusive start/end dates) and other team workouts on the same date. The current workout is excluded during editing. Choose Skip conflicting athletes or Include anyway to save when conflicts exist; skipping everyone leaves the form and existing records intact. Changing the date or selection requires a fresh choice. General blocks with no assigned athletes do not imply roster-wide assignments. Blocks contain weekly free text, so a date-range overlap is a warning, not proof of a daily workout. New or edited blocks do not retroactively remove team assignments.
+
+## v0.12 — Session scheduling and deletion
+
+Session log and Team training both check saved sessions, team workouts and assigned block date ranges before saving. Same-day assignments require an explicit Skip conflicting athletes or Include anyway choice even when start times differ. Multiple reps inside a single session are allowed; existing duplicates are preserved. Logging measured results from a planned workout may require Include anyway. General unassigned blocks are not roster-wide assignments.
+
+Optional local start times appear in saved summaries and survive backup/cloud transfers. Older records display Time not set. Team workout times can be changed through Edit. Session log remains a completed-results log; use Team training for future planned sessions.
+
+Open a saved session or team workout to delete it, then confirm. Deleting a logged session keeps its measured results by default and detaches their session links; select Also delete this session’s measured results and splits to remove those results too. Other sessions and results are preserved. Team deletion removes its assignments and completion statuses without deleting measured results. Deletion is local until the next manual cloud upload. Export a backup if needed before deleting.

@@ -3,6 +3,15 @@
  const el=id=>document.getElementById(id);let rowNumber=0;
  const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
  const status=(text,error=false)=>{const node=el('session-status');node.textContent=text;node.className=error?'error':'';node.scrollIntoView?.({block:'center',behavior:'smooth'});};
+ function previewConflicts(){
+  el('session-conflict-policy').value='';el('session-conflicts').hidden=true;el('session-conflict-list').replaceChildren();
+  if(!el('session-date').value)return;
+  const data=VXTLocal.snapshot(),ids=[...el('session-reps').querySelectorAll('[data-field="athleteId"]')].map(i=>i.value).filter(Boolean);
+  const overlaps=VXT.schedulingConflicts(data,{date:el('session-date').value,athleteIds:ids});el('session-conflicts').hidden=!overlaps.length;
+  for(const c of overlaps){const li=document.createElement('li');li.textContent=data.athletes.find(a=>a.id===c.athleteId)?.name+': '+[...c.blocks.map(b=>b.name+' (block '+VXT.formatDate(b.startDate)+' – '+VXT.formatDate(b.endDate)+')'),...c.workouts.map(w=>w.name+' (team workout, '+VXT.formatStartTime(w.startTime)+')'),...c.sessions.map(s=>s.name+' (saved session, '+VXT.formatStartTime(s.startTime)+')')].join('; ');el('session-conflict-list').append(li);}
+ }
+ el('session-date').addEventListener('change',()=>{try{previewConflicts();}catch(e){status(e.message,true);}});
+ el('session-reps').addEventListener('change',e=>{if(e.target.dataset.field==='athleteId')previewConflicts();});
  const field=(row,name)=>row.querySelector(`[data-field="${name}"]`);
  function fillAthletes(select,chosen){select.replaceChildren();const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose athlete';select.append(placeholder);
   for(const a of VXTLocal.snapshot().athletes){const o=document.createElement('option');o.value=a.id;o.textContent=a.name;select.append(o);}select.value=chosen||'';
@@ -79,7 +88,7 @@
   event.addEventListener('change',adjust);adjust();
   const actions=document.createElement('div');actions.className='session-rep-actions';
   const another=document.createElement('button');another.type='button';another.textContent='Next rep for this athlete';another.addEventListener('click',()=>addRep({athleteId:athlete.value,event:event.value}));actions.append(another);
-  const remove=document.createElement('button');remove.type='button';remove.textContent='Remove entry';remove.addEventListener('click',()=>row.remove());actions.append(remove);row.append(actions);el('session-reps').append(row);
+  const remove=document.createElement('button');remove.type='button';remove.textContent='Remove entry';remove.addEventListener('click',()=>{row.remove();previewConflicts();});actions.append(remove);row.append(actions);el('session-reps').append(row);previewConflicts();
  }
  function history(openId){
   const data=VXTLocal.snapshot(),container=el('session-history');container.replaceChildren();
@@ -90,7 +99,7 @@
    const section=document.createElement('details');section.className='session-summary';section.open=session.id===openId;const summary=document.createElement('summary');
    const records=data.results.filter(r=>r.sessionId===session.id),groups=new Map();for(const r of records){const k=r.repId||r.id;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);}
    const entries=session.efforts||[...groups.values()].map(g=>({id:g[0].repId||g[0].id,athleteId:g[0].athleteId,repNumber:g[0].repNumber,event:g[0].repEvent||g[0].event}));
-   summary.textContent=`${VXT.formatDate(session.date)} · ${session.name} · ${entries.length} reps · ${new Set(entries.map(r=>r.athleteId)).size} athletes`;section.append(summary);
+   summary.textContent=`${VXT.formatDate(session.date)} · ${VXT.formatStartTime(session.startTime)} · ${session.name} · ${entries.length} reps · ${new Set(entries.map(r=>r.athleteId)).size} athletes`;section.append(summary);
    const notes=document.createElement('p');notes.textContent=[session.method,session.notes].filter(Boolean).join(' · ');section.append(notes);
    for(const effort of entries){
     const athlete=data.athletes.find(a=>a.id===effort.athleteId);let detail='';
@@ -102,7 +111,13 @@
     else{const group=groups.get(effort.id)||[];group.sort((a,b)=>Number(a.event.replace(/\D/g,''))-Number(b.event.replace(/\D/g,'')));detail=group.length?group.map(r=>`${r.event} ${r.time.toFixed(2)}s${r.isSplit?' (split)':''}`).join(' · '):'Result records removed';}
     const p=document.createElement('p');p.textContent=`${athlete?.name||'Removed athlete'} · Rep ${effort.repNumber||'—'} · ${effort.event}: ${detail}`+(effort.restAfter==null?'':` · rest after rep ${effort.restAfter}s`)+(effort.notes?' · '+effort.notes:'');section.append(p);
    }
-   container.append(section);
+   const remove=document.createElement('button');remove.type='button';remove.textContent='Delete '+session.name;
+   const confirmation=document.createElement('div');confirmation.hidden=true;const prompt=document.createElement('p');prompt.textContent='Delete this saved session? Measured results are kept unless you select the option below.';
+   const label=document.createElement('label');label.className='check';const linked=document.createElement('input');linked.type='checkbox';label.append(linked,document.createTextNode('Also delete this session’s measured results and splits'));
+   const yes=document.createElement('button');yes.type='button';yes.textContent='Confirm delete session';const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel deletion';
+   confirmation.append(prompt,label,yes,cancel);remove.addEventListener('click',()=>confirmation.hidden=false);cancel.addEventListener('click',()=>{confirmation.hidden=true;linked.checked=false;});
+   yes.addEventListener('click',()=>{try{VXTLocal.appendReviewed(VXTSessions.remove(VXTLocal.snapshot(),session.id,linked.checked));history();previewConflicts();status(linked.checked?'Session and its measured results deleted.':'Session deleted. Measured results kept in Results.');}catch(e){status(e.message,true);}});
+   section.append(remove,confirmation);container.append(section);
   }
  }
  el('session-date').value=today();el('session-date').max=today();
@@ -110,7 +125,7 @@
  el('session-form').addEventListener('submit',e=>{
   e.preventDefault();const save=el('session-save');if(save.disabled)return;save.disabled=true;
   try{
-   const details={name:el('session-name').value,date:el('session-date').value,method:el('session-method').value,notes:el('session-notes').value};if(details.date>today())throw Error('Choose today or an earlier date for a completed session.');
+   const details={name:el('session-name').value,date:el('session-date').value,startTime:el('session-start-time').value,conflictPolicy:el('session-conflict-policy').value,method:el('session-method').value,notes:el('session-notes').value};if(details.date>today())throw Error('Choose today or an earlier date for a completed session.');
    const reps=[...el('session-reps').children].map((row,index)=>{
     const v=name=>field(row,name)?.value||'';
     const rep={athleteId:v('athleteId'),event:v('event'),time:v('time'),notes:v('notes'),restAfter:v('restAfter'),distance:v('distance'),load:v('load'),loadUnit:v('loadUnit'),wicketCount:v('wicketCount'),spacing:v('spacing'),spacingUnit:v('spacingUnit'),splits:Object.fromEntries([10,20,30,60].filter(d=>!field(row,'split'+d).disabled).map(d=>[d,v('split'+d)]))};
@@ -132,11 +147,11 @@
    const result=VXTSessions.build(VXTLocal.snapshot(),details,reps,()=>crypto.randomUUID());VXTLocal.appendReviewed(result.data);
    // Confirm durable local storage before clearing the entry form.
    if(!VXTLocal.snapshot().sessions?.some(s=>s.id===result.sessionId))throw Error('Session was not saved. Keep this page open and try again.');
-   el('session-reps').replaceChildren();rowNumber=0;el('session-name').value='';el('session-notes').value='';history(result.sessionId);
-   status(`Saved ${result.reps} reps for ${result.athletes} athletes. See the expanded session below. ${result.records} continuous finish times and splits added to Results. Upload to cloud for your other device.`);
+   el('session-reps').replaceChildren();rowNumber=0;el('session-name').value='';el('session-notes').value='';el('session-start-time').value='';previewConflicts();history(result.sessionId);
+   status(`${result.skipped?result.skipped+' conflicting athletes skipped. ':''}Saved ${result.reps} reps for ${result.athletes} athletes. See the expanded session below. ${result.records} continuous finish times and splits added to Results. Upload to cloud for your other device.`);
   }catch(error){status(error.message,true);}finally{save.disabled=false;}
  });
  document.querySelectorAll('[data-tab="sessions"]').forEach(button=>button.addEventListener('click',()=>{
-  try{for(const row of el('session-reps').children){const s=field(row,'athleteId');fillAthletes(s,s.value);}if(!el('session-reps').children.length)addRep();history();}catch(e){status(e.message,true);}
+  try{for(const row of el('session-reps').children){const s=field(row,'athleteId');fillAthletes(s,s.value);}if(!el('session-reps').children.length)addRep();previewConflicts();history();}catch(e){status(e.message,true);}
  }));
 })();
