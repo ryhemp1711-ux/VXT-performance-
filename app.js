@@ -12,7 +12,7 @@ function commit(next,restoring=false){try{if(storageBlocked&&!restoring)throw Er
 function selected(){if(!active){message('Add or select an athlete first.',true);return false;}return true;}
 function table(headers,rows){return rows.length?'<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<p class="empty">No records yet.</p>';}
 function tab(id){
- const training=['sessions','blocks','team'].includes(id);
+ const training=['sessions','blocks','team','calendar','templates','groups'].includes(id);
  document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==id);
  $('#training-nav').hidden=!training;
  document.querySelectorAll('nav button').forEach(b=>{
@@ -20,7 +20,7 @@ function tab(id){
   b.classList.toggle('active',selected);
   if(selected)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
  });
- $('#page-title').textContent=training?'Training sessions':{dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync',screenshot:'Import screenshot'}[id];
+ $('#page-title').textContent=training?'Training sessions':{dashboard:'Performance overview',results:'Results & personal bests',predictor:'Sprint-time predictor',backup:'Data & backup',cloud:'Cloud sync',screenshot:'Import screenshot',reports:'Athlete reports'}[id];
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{tab(b.dataset.tab);if(b.dataset.tab==='predictor')predictorFields();}));
 function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
@@ -68,7 +68,7 @@ $('#roster').addEventListener('click',e=>{
  const a=data.athletes.find(x=>x.id===b.dataset.removeAthlete);if(!a)return;
  const count=data.results.filter(r=>r.athleteId===a.id).length, predictions=data.predictions.filter(r=>r.athleteId===a.id).length;
  if(!confirm('Delete '+a.name+' and their '+count+' results and '+predictions+' predictions? Export a backup first if needed. This cannot be undone.'))return;
- if(commit({...data,...(data.teamWorkouts?{teamWorkouts:data.teamWorkouts.map(w=>({...w,assignments:w.assignments.filter(x=>x.athleteId!==a.id)}))}:{}),...(data.trainingBlocks?{trainingBlocks:data.trainingBlocks.map(b=>({...b,athleteIds:b.athleteIds.filter(id=>id!==a.id)}))}:{}),...(data.sessions?{sessions:data.sessions.map(s=>s.efforts?{...s,efforts:s.efforts.filter(e=>e.athleteId!==a.id)}:s)}:{}),athletes:data.athletes.filter(x=>x.id!==a.id),results:data.results.filter(x=>x.athleteId!==a.id),predictions:data.predictions.filter(x=>x.athleteId!==a.id)})){
+ if(commit({...data,...(data.trainingGroups?{trainingGroups:data.trainingGroups.map(g=>({...g,athleteIds:g.athleteIds.filter(id=>id!==a.id)}))}:{}),...(data.athleteReports?{athleteReports:data.athleteReports.filter(r=>r.athleteId!==a.id)}:{}),...(data.teamWorkouts?{teamWorkouts:data.teamWorkouts.map(w=>({...w,assignments:w.assignments.filter(x=>x.athleteId!==a.id)}))}:{}),...(data.trainingBlocks?{trainingBlocks:data.trainingBlocks.map(b=>({...b,athleteIds:b.athleteIds.filter(id=>id!==a.id)}))}:{}),...(data.sessions?{sessions:data.sessions.map(s=>s.efforts?{...s,efforts:s.efforts.filter(e=>e.athleteId!==a.id),...(s.athleteTargets?{athleteTargets:s.athleteTargets.filter(t=>t.athleteId!==a.id)}:{})}:s)}:{}),athletes:data.athletes.filter(x=>x.id!==a.id),results:data.results.filter(x=>x.athleteId!==a.id),predictions:data.predictions.filter(x=>x.athleteId!==a.id)})){
  resetResultForm();predictorFields();message('Athlete and associated records deleted.');}
 });
 const number=(name,label,required=true)=>'<label>'+label+'<input type="number" name="'+name+'" step="0.01" min="0.01" max="3600" '+(required?'required':'')+'></label>';

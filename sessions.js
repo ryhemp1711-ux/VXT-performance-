@@ -1,13 +1,13 @@
 'use strict';
 (()=>{
- const el=id=>document.getElementById(id);let rowNumber=0;
+ const el=id=>document.getElementById(id);let rowNumber=0,sourceWorkoutId=null;
  const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
  const status=(text,error=false)=>{const node=el('session-status');node.textContent=text;node.className=error?'error':'';node.scrollIntoView?.({block:'center',behavior:'smooth'});};
  function previewConflicts(){
   el('session-conflict-policy').value='';el('session-conflicts').hidden=true;el('session-conflict-list').replaceChildren();
   if(!el('session-date').value)return;
   const data=VXTLocal.snapshot(),ids=[...el('session-reps').querySelectorAll('[data-field="athleteId"]')].map(i=>i.value).filter(Boolean);
-  const overlaps=VXT.schedulingConflicts(data,{date:el('session-date').value,athleteIds:ids});el('session-conflicts').hidden=!overlaps.length;
+  const overlaps=VXT.schedulingConflicts(data,{date:el('session-date').value,excludeTeamId:sourceWorkoutId,athleteIds:ids});el('session-conflicts').hidden=!overlaps.length;
   for(const c of overlaps){const li=document.createElement('li');li.textContent=data.athletes.find(a=>a.id===c.athleteId)?.name+': '+[...c.blocks.map(b=>b.name+' (block '+VXT.formatDate(b.startDate)+' – '+VXT.formatDate(b.endDate)+')'),...c.workouts.map(w=>w.name+' (team workout, '+VXT.formatStartTime(w.startTime)+')'),...c.sessions.map(s=>s.name+' (saved session, '+VXT.formatStartTime(s.startTime)+')')].join('; ');el('session-conflict-list').append(li);}
  }
  el('session-date').addEventListener('change',()=>{try{previewConflicts();}catch(e){status(e.message,true);}});
@@ -85,7 +85,7 @@
    for(const d of [10,20,30,60]){const input=field(row,'split'+d);input.disabled=!race||fly||d>=distance;input.parentElement.hidden=input.disabled;}intro.hidden=!race||fly;
    if(isBroken)updateSum();
   }
-  event.addEventListener('change',adjust);adjust();
+  event.addEventListener('change',adjust);adjust();if(copy?.restAfter!=null)field(row,'restAfter').value=copy.restAfter;
   const actions=document.createElement('div');actions.className='session-rep-actions';
   const another=document.createElement('button');another.type='button';another.textContent='Next rep for this athlete';another.addEventListener('click',()=>addRep({athleteId:athlete.value,event:event.value}));actions.append(another);
   const remove=document.createElement('button');remove.type='button';remove.textContent='Remove entry';remove.addEventListener('click',()=>{row.remove();previewConflicts();});actions.append(remove);row.append(actions);el('session-reps').append(row);previewConflicts();
@@ -96,10 +96,11 @@
   if(!sessions.length){container.textContent='No saved sessions on this device yet. Use Save session results above; individual results logged in Results are not grouped into a session.';return;}
   const seconds=n=>n==null?'not recorded':Number(n).toFixed(2)+'s';
   for(const session of sessions){
-   const section=document.createElement('details');section.className='session-summary';section.open=session.id===openId;const summary=document.createElement('summary');
+   const section=document.createElement('details');section.className='session-summary';section.open=session.id===openId;section.dataset.sessionId=session.id;const summary=document.createElement('summary');
    const records=data.results.filter(r=>r.sessionId===session.id),groups=new Map();for(const r of records){const k=r.repId||r.id;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);}
    const entries=session.efforts||[...groups.values()].map(g=>({id:g[0].repId||g[0].id,athleteId:g[0].athleteId,repNumber:g[0].repNumber,event:g[0].repEvent||g[0].event}));
    summary.textContent=`${VXT.formatDate(session.date)} · ${VXT.formatStartTime(session.startTime)} · ${session.name} · ${entries.length} reps · ${new Set(entries.map(r=>r.athleteId)).size} athletes`;section.append(summary);
+   if(session.plannedWorkout){const p=document.createElement('p');p.className='planned-prescription';p.textContent='Planned workout: '+session.plannedWorkout;section.append(p);for(const t of session.athleteTargets||[]){if(t.target){const n=document.createElement('p');n.textContent=(data.athletes.find(a=>a.id===t.athleteId)?.name||'Athlete')+' target: '+t.target;section.append(n);}}}
    const notes=document.createElement('p');notes.textContent=[session.method,session.notes].filter(Boolean).join(' · ');section.append(notes);
    for(const effort of entries){
     const athlete=data.athletes.find(a=>a.id===effort.athleteId);let detail='';
@@ -125,7 +126,7 @@
  el('session-form').addEventListener('submit',e=>{
   e.preventDefault();const save=el('session-save');if(save.disabled)return;save.disabled=true;
   try{
-   const details={name:el('session-name').value,date:el('session-date').value,startTime:el('session-start-time').value,conflictPolicy:el('session-conflict-policy').value,method:el('session-method').value,notes:el('session-notes').value};if(details.date>today())throw Error('Choose today or an earlier date for a completed session.');
+   const details={sourceWorkoutId,name:el('session-name').value,date:el('session-date').value,startTime:el('session-start-time').value,conflictPolicy:el('session-conflict-policy').value,method:el('session-method').value,notes:el('session-notes').value};if(details.date>today())throw Error('Choose today or an earlier date for a completed session.');
    const reps=[...el('session-reps').children].map((row,index)=>{
     const v=name=>field(row,name)?.value||'';
     const rep={athleteId:v('athleteId'),event:v('event'),time:v('time'),notes:v('notes'),restAfter:v('restAfter'),distance:v('distance'),load:v('load'),loadUnit:v('loadUnit'),wicketCount:v('wicketCount'),spacing:v('spacing'),spacingUnit:v('spacingUnit'),splits:Object.fromEntries([10,20,30,60].filter(d=>!field(row,'split'+d).disabled).map(d=>[d,v('split'+d)]))};
@@ -147,10 +148,29 @@
    const result=VXTSessions.build(VXTLocal.snapshot(),details,reps,()=>crypto.randomUUID());VXTLocal.appendReviewed(result.data);
    // Confirm durable local storage before clearing the entry form.
    if(!VXTLocal.snapshot().sessions?.some(s=>s.id===result.sessionId))throw Error('Session was not saved. Keep this page open and try again.');
-   el('session-reps').replaceChildren();rowNumber=0;el('session-name').value='';el('session-notes').value='';el('session-start-time').value='';previewConflicts();history(result.sessionId);
+   el('session-reps').replaceChildren();rowNumber=0;el('session-name').value='';el('session-notes').value='';el('session-start-time').value='';sourceWorkoutId=null;el('session-source').hidden=true;el('session-unlink').hidden=true;previewConflicts();history(result.sessionId);
    status(`${result.skipped?result.skipped+' conflicting athletes skipped. ':''}Saved ${result.reps} reps for ${result.athletes} athletes. See the expanded session below. ${result.records} continuous finish times and splits added to Results. Upload to cloud for your other device.`);
   }catch(error){status(error.message,true);}finally{save.disabled=false;}
  });
+
+ function loadWorkout(id){
+  try{
+   const data=VXTLocal.snapshot(),w=data.teamWorkouts?.find(w=>w.id===id);if(!w)throw Error('Workout is no longer available.');if(w.date>today())throw Error('This workout is scheduled in the future. Log measured results on or after its date.');
+   const done=new Set((data.sessions||[]).filter(s=>s.sourceWorkoutId===id).flatMap(s=>s.efforts.map(e=>e.athleteId)));
+   const assignments=w.assignments.filter(a=>a.attendance!=='Absent'&&!done.has(a.athleteId));if(!assignments.length)throw Error('No athletes remain to log: all are absent or already have linked results.');
+   const count=w.prescription?.reps||1;if(count*assignments.length>500)throw Error('This workout exceeds 500 rep entries. Log a smaller group.');
+   sourceWorkoutId=id;document.querySelector('[data-tab="sessions"]').click();el('session-reps').replaceChildren();rowNumber=0;el('session-name').value=w.name;el('session-date').value=w.date;el('session-start-time').value=w.startTime||'';el('session-notes').value='';
+   el('session-source').textContent='Linked workout: '+w.workout+' — '+assignments.map(a=>(data.athletes.find(x=>x.id===a.athleteId)?.name||'Athlete')+(a.target?': '+a.target:'')).join('; ');el('session-source').hidden=false;el('session-unlink').hidden=false;
+   for(const a of assignments)for(let i=0;i<count;i++)addRep({athleteId:a.athleteId,event:w.prescription?.event||'60m',restAfter:w.prescription?.restAfter});previewConflicts();status('Planned workout loaded. Enter measured times and drill details. Targets are not measured results.');
+  }catch(e){const node=el('team-status');node.textContent=e.message;node.className='error';node.scrollIntoView?.({block:'center'});}
+ }
+ document.addEventListener('vxt-log-workout',e=>{
+  if(el('session-name').value||el('session-notes').value||sourceWorkoutId||el('session-reps').children.length>1||[...el('session-reps').querySelectorAll('input')].some(i=>!i.disabled&&i.value!==''&&!i.dataset.field.startsWith('tempo'))){el('session-replace').hidden=false;el('session-replace').dataset.workoutId=e.detail;document.querySelector('[data-tab="sessions"]').click();return;}
+  loadWorkout(e.detail);
+ });
+ el('session-replace-yes').addEventListener('click',()=>{const id=el('session-replace').dataset.workoutId;el('session-replace').hidden=true;loadWorkout(id);});
+ el('session-replace-no').addEventListener('click',()=>el('session-replace').hidden=true);
+ el('session-unlink').addEventListener('click',()=>{sourceWorkoutId=null;el('session-source').hidden=true;el('session-unlink').hidden=true;previewConflicts();status('Link removed. Current entries remain in the form.');});
  document.querySelectorAll('[data-tab="sessions"]').forEach(button=>button.addEventListener('click',()=>{
   try{for(const row of el('session-reps').children){const s=field(row,'athleteId');fillAthletes(s,s.value);}if(!el('session-reps').children.length)addRep();previewConflicts();history();}catch(e){status(e.message,true);}
  }));

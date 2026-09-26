@@ -16,7 +16,13 @@ function build(data,details,reps,newId){
  if(notes.length>1000)throw Error('Session notes must be under 1,001 characters.');
  if(!['Video','Gates','FAT','Hand','Unknown'].includes(details.method))throw Error('Choose a timing method.');
  if(!Array.isArray(reps)||!reps.length||reps.length>500)throw Error('Add between 1 and 500 reps.');
- const overlaps=V.schedulingConflicts(data,{date,athleteIds:reps.map(r=>r.athleteId)});
+ const source=details.sourceWorkoutId?data.teamWorkouts?.find(w=>w.id===details.sourceWorkoutId):null;
+ if(details.sourceWorkoutId){
+  if(!source||source.date!==date)throw Error('The linked workout must exist and match this date.');
+  if(reps.some(r=>!source.assignments.some(a=>a.athleteId===r.athleteId&&a.attendance!=='Absent')))throw Error('Choose assigned, non-absent athletes for linked results.');
+  if((data.sessions||[]).some(s=>s.sourceWorkoutId===source.id&&s.efforts.some(e=>reps.some(r=>r.athleteId===e.athleteId))))throw Error('Results are already logged for an athlete in this workout. Edit their times in Results or delete the linked session before logging again.');
+ }
+ const overlaps=V.schedulingConflicts(data,{date,excludeTeamId:source?.id,athleteIds:reps.map(r=>r.athleteId)});
  let skipped=0;
  if(overlaps.length){
   if(!['skip','include'].includes(details.conflictPolicy))throw Error('Scheduling conflicts found. Choose Skip conflicting athletes or Include anyway before saving.');
@@ -84,14 +90,18 @@ function build(data,details,reps,newId){
   const resultNotes=`Session: ${name}. Rep ${repNumber}. ${fly?'Flying effort after a run-in.':'Standing start; cumulative times from the same run.'} ${effort.notes}`.trim();
   for(const [i,p] of points.entries())results.push({id:newId(),athleteId:rep.athleteId,event:p.event,time:p.time,date,method:details.method,notes:resultNotes,sessionId,repId,repNumber,repEvent:rep.event,isSplit:i<points.length-1});
  }
- const next={...data,sessions:[...(data.sessions||[]),{id:sessionId,name,date,startTime,notes,method:details.method,efforts}],results:[...data.results,...results]};
+ const next={...data,sessions:[...(data.sessions||[]),{id:sessionId,name,date,startTime,notes,method:details.method,efforts,...(source?{sourceWorkoutId:source.id,plannedWorkout:source.workout,athleteTargets:source.assignments.filter(a=>counts.has(a.athleteId)).map(a=>({athleteId:a.athleteId,target:a.target||''}))}:{})}],results:[...data.results,...results]};
+ if(source)next.teamWorkouts=data.teamWorkouts.map(w=>w.id===source.id?{...w,assignments:w.assignments.map(a=>counts.has(a.athleteId)?{...a,completed:true}:a)}:w);
  return {data:V.validateData(next),sessionId,reps:reps.length,records:results.length,athletes:counts.size,skipped};
 }
 function remove(data,id,removeResults=false){
  data=V.validateData(data);if(!data.sessions?.some(s=>s.id===id))throw Error('This session is no longer available.');
  if(typeof removeResults!=='boolean')throw Error('Choose whether to remove results.');
  const results=data.results.flatMap(r=>{if(r.sessionId!==id)return [r];if(removeResults)return [];const {sessionId,repId,repNumber,repEvent,isSplit,...record}=r;return [record];});
- return V.validateData({...data,sessions:data.sessions.filter(s=>s.id!==id),results});
+ const removed=data.sessions.find(s=>s.id===id),sessions=data.sessions.filter(s=>s.id!==id);
+ const next={...data,sessions,results};
+ if(removed.sourceWorkoutId)next.teamWorkouts=data.teamWorkouts.map(w=>w.id!==removed.sourceWorkoutId?w:{...w,assignments:w.assignments.map(a=>removed.efforts.some(e=>e.athleteId===a.athleteId)&&!sessions.some(s=>s.sourceWorkoutId===w.id&&s.efforts.some(e=>e.athleteId===a.athleteId))?{...a,completed:false}:a)});
+ return V.validateData(next);
 }
 const api={remove,build,events,raceEvents};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTSessions=api;
 })(globalThis);

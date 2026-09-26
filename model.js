@@ -50,11 +50,19 @@ function validateData(data){
  if(!data||data.version!==1||!Array.isArray(data.athletes)||!Array.isArray(data.results)||!Array.isArray(data.predictions))throw Error('Not a VXT version 1 backup.');
  if(data.athletes.length>5000||data.results.length>100000||data.predictions.length>100000)throw Error('Backup is too large.');
  const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');ids.add(a.id);}
+ const validText=(s,max)=>typeof s==='string'&&s.length<=max;
+ const list=(key,max)=>{if(data[key]==null)return [];if(!Array.isArray(data[key])||data[key].length>max)throw Error('Invalid '+key+'.');return data[key];};
+ const unique=(rows)=>{const seen=new Set();for(const row of rows){if(!row||typeof row.id!=='string'||!row.id||seen.has(row.id))throw Error('Invalid or duplicate record ID.');seen.add(row.id);}};
+ const groups=list('trainingGroups',1000);unique(groups);for(const g of groups){if(!validText(g.name,100)||!g.name.trim()||!Array.isArray(g.athleteIds)||new Set(g.athleteIds).size!==g.athleteIds.length||g.athleteIds.some(id=>!ids.has(id)))throw Error('Invalid training group.');}
+ const prescription=p=>{if(!p||!['10m','20m','30m','55m','60m','100m','150m','200m','250m','300m','350m','400m','450m','500m','Fly 10m','Fly 20m','Fly 30m','Sled push','Wicket run','Tempo','400 the hard way','Broken 200m','Broken 300m','Broken 400m'].includes(p.event)||!Number.isInteger(p.reps)||p.reps<1||p.reps>20||(p.restAfter!==null&&(typeof p.restAfter!=='number'||!Number.isFinite(p.restAfter)||p.restAfter<0||p.restAfter>86400)))throw Error('Invalid planned rep settings.');};
+ const templates=list('workoutTemplates',1000);unique(templates);for(const t of templates){if(!validText(t.name,100)||!t.name.trim()||!validText(t.workout,10000)||!t.workout.trim()||!validText(t.notes,2000))throw Error('Invalid workout template.');prescription(t);}
+ const reports=list('athleteReports',5000),reportIds=new Set();for(const r of reports){if(!r||!ids.has(r.athleteId)||reportIds.has(r.athleteId)||!validText(r.notes,4000))throw Error('Invalid athlete report.');reportIds.add(r.athleteId);}
  if(data.teamWorkouts!=null){
   if(!Array.isArray(data.teamWorkouts)||data.teamWorkouts.length>5000)throw Error('Invalid team workouts.');
   const workoutIds=new Set();for(const w of data.teamWorkouts){
    if(!w||typeof w.id!=='string'||!w.id||workoutIds.has(w.id)||typeof w.name!=='string'||!w.name.trim()||w.name.length>100||typeof w.date!=='string'||w.date.length!==10||normalizeDate(w.date)!==w.date||typeof w.workout!=='string'||!w.workout.trim()||w.workout.length>10000||typeof w.notes!=='string'||w.notes.length>2000||!Array.isArray(w.assignments)||w.assignments.length>5000)throw Error('Invalid team workout.');
-   startTime(w.startTime);
+   startTime(w.startTime);if(w.prescription!=null)prescription(w.prescription);
+   for(const a of w.assignments){if(a.target!==undefined&&!validText(a.target,500)||a.readinessNotes!==undefined&&!validText(a.readinessNotes,1000)||a.attendance!==undefined&&!['Unrecorded','Present','Absent','Modified'].includes(a.attendance)||a.energy!=null&&(!Number.isInteger(a.energy)||a.energy<1||a.energy>5)||a.soreness!=null&&(!Number.isInteger(a.soreness)||a.soreness<0||a.soreness>10))throw Error('Invalid athlete target or readiness.');}
    const assigned=new Set();for(const a of w.assignments){if(!a||!ids.has(a.athleteId)||assigned.has(a.athleteId)||typeof a.completed!=='boolean')throw Error('Invalid team workout assignment.');assigned.add(a.athleteId);}workoutIds.add(w.id);
   }
  }
@@ -77,6 +85,9 @@ function validateData(data){
   for(const session of data.sessions){
    if(!session||typeof session.id!=='string'||!session.id||sessionIds.has(session.id)||typeof session.name!=='string'||!session.name.trim()||session.name.length>100||typeof session.notes!=='string'||session.notes.length>1000||!['Video','Gates','FAT','Hand','Unknown'].includes(session.method)||normalizeDate(session.date)!==session.date||session.date.length!==10)throw Error('Invalid training session.');
    startTime(session.startTime);
+   if(session.sourceWorkoutId!=null){const w=data.teamWorkouts?.find(w=>w.id===session.sourceWorkoutId);if(!w||w.date!==session.date||!Array.isArray(session.efforts)||session.efforts.some(e=>!w.assignments.some(a=>a.athleteId===e.athleteId)))throw Error('Invalid linked workout session.');}
+   if(session.plannedWorkout!==undefined&&!validText(session.plannedWorkout,10000))throw Error('Invalid planned workout snapshot.');
+   if(session.athleteTargets!==undefined&&(!Array.isArray(session.athleteTargets)||session.athleteTargets.some(t=>!t||!ids.has(t.athleteId)||!validText(t.target,500))))throw Error('Invalid target snapshot.');
    if(session.efforts!=null){
     if(!Array.isArray(session.efforts)||session.efforts.length>500)throw Error('Invalid session efforts.');
     const effortsSeen=new Set(),validNumber=(n,min=0,max=86400)=>typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max;
