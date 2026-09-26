@@ -109,3 +109,9 @@ Validation: 38 tests pass, plus DOM save-button checks for field errors, wrong-t
 Choose **400 the hard way** in Training sessions. Run 100m, walk back 50m and repeat until reaching the end of the 400m lap: seven 100m runs, six 50m walk-backs, 700m total running and 300m walking. There is no walk-back after the final run. One session entry records the full workout, with optional individual run and walk-back times, optional rest after the workout and notes. Running time appears only when all seven runs are timed and excludes walking. This drill never becomes a continuous 400m result or predictor input.
 
 The fixed structure, optional times and totals survive reloads, JSON backups and manual cloud transfers. Refresh both devices to v0.8 before transferring this drill; older clients reject the new effort type. No database migration is required.
+
+## v0.9: tempo sessions
+
+Choose **Tempo** in Training sessions. The editable default is 2 sets of 5 × 100m. Set the number of sets, reps per set and distance, with optional rest between reps, rest between sets, individual rep times, notes and rest after the complete workout. Between-set recovery replaces between-rep recovery at set boundaries. One-set or one-rep workouts omit the unused recovery field. The summary shows total running distance and per-set times; total running time appears only when all reps are timed and excludes recovery. Up to 200 runs are supported per tempo entry.
+
+Tempo is training-only: no continuous race results or predictor inputs are created. Tempo structure and times survive local reloads, JSON backups and manual cloud transfers. Refresh both devices to v0.9 before transferring tempo entries; no database migration is needed.

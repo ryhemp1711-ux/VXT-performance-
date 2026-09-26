@@ -2,7 +2,7 @@
 'use strict';
 const V=typeof module!=='undefined'&&module.exports?require('./model.js'):root.VXT;
 const raceEvents=['10m','20m','30m','55m','60m','100m','150m','200m','250m','300m','350m','400m','450m','500m','Fly 10m','Fly 20m','Fly 30m'];
-const events=[...raceEvents,'Sled push','Wicket run','400 the hard way','Broken 200m','Broken 300m','Broken 400m'];
+const events=[...raceEvents,'Sled push','Wicket run','Tempo','400 the hard way','Broken 200m','Broken 300m','Broken 400m'];
 const optional=(v)=>v==null||String(v).trim()==='';
 function number(v,label,{min=0,max=3600,required=false,integer=false}={}){
  if(optional(v)){if(required)throw Error(label+' is required.');return null;}
@@ -24,6 +24,19 @@ function build(data,details,reps,newId){
   const repId=newId(),repNumber=(counts.get(rep.athleteId)||0)+1;counts.set(rep.athleteId,repNumber);
   const effort={id:repId,athleteId:rep.athleteId,repNumber,event:rep.event,notes:String(rep.notes||'').trim(),restAfter:number(rep.restAfter,prefix+'rest after rep (seconds)',{max:86400})};
   if(effort.notes.length>500)throw Error(prefix+'rep notes must be 500 characters or fewer.');
+  if(rep.event==='Tempo'){
+   effort.sets=number(rep.sets,prefix+'tempo sets',{min:1,max:20,required:true,integer:true});
+   effort.repsPerSet=number(rep.repsPerSet,prefix+'tempo reps per set',{min:1,max:50,required:true,integer:true});
+   const count=effort.sets*effort.repsPerSet;if(count>200)throw Error(prefix+'tempo is limited to 200 runs per entry.');
+   effort.distance=number(rep.tempoDistance,prefix+'tempo distance (meters)',{min:.01,max:5000,required:true});
+   effort.repRest=effort.repsPerSet>1?number(rep.repRest,prefix+'rest between tempo reps',{max:86400}):null;
+   effort.setRest=effort.sets>1?number(rep.setRest,prefix+'rest between tempo sets',{max:86400}):null;
+   if(!Array.isArray(rep.times)||rep.times.length!==count)throw Error(prefix+'tempo times must match sets and reps.');
+   effort.times=rep.times.map((t,i)=>number(t,prefix+`tempo run ${i+1} time`,{min:.01}));
+   effort.runningDistance=count*effort.distance;
+   effort.runningTime=effort.times.every(t=>t!==null)?effort.times.reduce((n,t)=>n+t,0):null;
+   efforts.push(effort);continue;
+  }
   if(rep.event==='400 the hard way'){
    if(!Array.isArray(rep.segments)||rep.segments.length!==7)throw Error(prefix+'enter seven 100m runs.');
    effort.distance=400;effort.runningDistance=700;effort.walkingDistance=300;

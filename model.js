@@ -49,7 +49,11 @@ function validateData(data){
     for(const e of session.efforts){
      if(!e||typeof e.id!=='string'||!e.id||effortsSeen.has(e.id)||!ids.has(e.athleteId)||!Number.isInteger(e.repNumber)||e.repNumber<1||typeof e.notes!=='string'||e.notes.length>500||(e.restAfter!=null&&!validNumber(e.restAfter)))throw Error('Invalid session effort.');
      effortsSeen.add(e.id);
-     if(e.event==='400 the hard way'){
+     if(e.event==='Tempo'){
+      if(!Number.isInteger(e.sets)||!validNumber(e.sets,1,20)||!Number.isInteger(e.repsPerSet)||!validNumber(e.repsPerSet,1,50)||e.sets*e.repsPerSet>200||!validNumber(e.distance,.01,5000)||!Array.isArray(e.times)||e.times.length!==e.sets*e.repsPerSet||e.times.some(t=>t!==null&&!validNumber(t,.01,3600))||(e.repRest!=null&&!validNumber(e.repRest))||(e.setRest!=null&&!validNumber(e.setRest))||(e.repsPerSet===1&&e.repRest!==null)||(e.sets===1&&e.setRest!==null)||e.runningDistance!==e.sets*e.repsPerSet*e.distance)throw Error('Invalid tempo effort.');
+      const total=e.times.every(t=>t!==null)?e.times.reduce((n,t)=>n+t,0):null;
+      if(total===null?e.runningTime!==null:!validNumber(e.runningTime,0,720000)||Math.abs(total-e.runningTime)>.001)throw Error('Invalid tempo running time.');
+     }else if(e.event==='400 the hard way'){
       if(e.distance!==400||e.runningDistance!==700||e.walkingDistance!==300||!Array.isArray(e.segments)||e.segments.length!==7||e.segments.some((p,i)=>!p||p.distance!==100||p.walkBackDistance!==(i<6?50:0)||(p.time!=null&&!validNumber(p.time,.01,3600))||(i<6?p.walkBackTime!=null&&!validNumber(p.walkBackTime):p.walkBackTime!==null)))throw Error('Invalid 400 the hard way.');
       const total=e.segments.every(p=>p.time!=null)?e.segments.reduce((n,p)=>n+p.time,0):null;
       if(total===null?e.runningTime!==null:!validNumber(e.runningTime,0,25200)||Math.abs(total-e.runningTime)>.001)throw Error('Invalid hard-way running time.');
