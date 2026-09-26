@@ -117,3 +117,9 @@ Choose **Tempo** in Training sessions. The editable default is 2 sets of 5 × 10
 Tempo is training-only: no continuous race results or predictor inputs are created. Tempo structure and times survive local reloads, JSON backups and manual cloud transfers. Refresh both devices to v0.9 before transferring tempo entries; no database migration is needed.
 
 Tempo entries now include a category: Extensive or Intensive. Extensive is the editable default for new entries. Previously saved tempo entries keep their original data and display Unspecified rather than being assigned a category. The category is retained in session summaries and backups.
+
+## v0.10: training blocks
+
+Training blocks creates editable plans lasting 3–51 weeks in three-week increments. Choose a start date, block name, optional roster athletes and goals; fill in each week’s focus and workout/recovery notes. Date ranges and three-week cycles are calculated automatically. A three-week block includes 21 calendar days starting on the chosen date. Future plans are allowed. Blank weekly plans can be filled in later with Edit; Cancel leaves the saved plan unchanged. Plans never become completed sessions or race results.
+
+Blocks persist in the existing local workspace and JSON backups/manual cloud transfers. Athlete deletion removes their block assignment while preserving the plan. Existing backups without blocks remain valid. Refresh both devices to v0.10 to view and edit blocks. No SQL migration is required. Unsaved form drafts do not survive page reloads.

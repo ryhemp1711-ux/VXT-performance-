@@ -36,6 +36,17 @@ function validateData(data){
  if(!data||data.version!==1||!Array.isArray(data.athletes)||!Array.isArray(data.results)||!Array.isArray(data.predictions))throw Error('Not a VXT version 1 backup.');
  if(data.athletes.length>5000||data.results.length>100000||data.predictions.length>100000)throw Error('Backup is too large.');
  const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');ids.add(a.id);}
+ if(data.trainingBlocks!=null){
+  if(!Array.isArray(data.trainingBlocks)||data.trainingBlocks.length>1000)throw Error('Invalid training blocks.');
+  const blockIds=new Set();
+  for(const b of data.trainingBlocks){
+   if(!b||typeof b.id!=='string'||!b.id||blockIds.has(b.id)||typeof b.name!=='string'||!b.name.trim()||b.name.length>100||!Number.isInteger(b.weeks)||b.weeks<3||b.weeks>51||b.weeks%3||typeof b.notes!=='string'||b.notes.length>2000||typeof b.startDate!=='string'||normalizeDate(b.startDate)!==b.startDate||b.startDate.length!==10||typeof b.endDate!=='string'||normalizeDate(b.endDate)!==b.endDate||b.endDate.length!==10)throw Error('Invalid training block.');
+   const end=new Date(b.startDate+'T00:00:00Z');end.setUTCDate(end.getUTCDate()+b.weeks*7-1);if(end.toISOString().slice(0,10)!==b.endDate)throw Error('Invalid training block date range.');
+   if(!Array.isArray(b.athleteIds)||new Set(b.athleteIds).size!==b.athleteIds.length||b.athleteIds.some(id=>!ids.has(id)))throw Error('Invalid block athletes.');
+   if(!Array.isArray(b.plan)||b.plan.length!==b.weeks||b.plan.some((w,i)=>!w||w.week!==i+1||typeof w.focus!=='string'||w.focus.length>200||typeof w.workouts!=='string'||w.workouts.length>4000))throw Error('Invalid weekly block plan.');
+   blockIds.add(b.id);
+  }
+ }
  let changed=false;const normalize=r=>{if(!r)throw Error('Invalid performance record.');const date=normalizeDate(r.date);if(date===r.date)return r;changed=true;return {...r,date};};
  const normalized={...data,results:data.results.map(normalize),predictions:data.predictions.map(normalize)};
  const sessionIds=new Set();
