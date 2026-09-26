@@ -4,7 +4,15 @@
  const status=(text,error=false)=>{el('team-status').textContent=text;el('team-status').className=error?'error':'';};
  const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
  const selected=()=>[...el('team-athletes').querySelectorAll('input:checked')].map(i=>i.value);
- function count(){el('team-count').textContent=selected().length+' athletes selected';}
+ function count(){el('team-count').textContent=selected().length+' athletes selected';previewConflicts();}
+ function previewConflicts(){
+  el('team-conflict-policy').value='';el('team-conflicts').hidden=true;el('team-conflict-list').replaceChildren();
+  if(!el('team-date').value)return;
+  const data=VXTLocal.snapshot(),overlaps=VXTTeam.conflicts(data,{id:editing,date:el('team-date').value,athleteIds:selected()});
+  el('team-conflicts').hidden=!overlaps.length;
+  for(const c of overlaps){const item=document.createElement('li');item.textContent=data.athletes.find(a=>a.id===c.athleteId).name+': '+[...c.blocks.map(b=>b.name+' (block '+VXT.formatDate(b.startDate)+' – '+VXT.formatDate(b.endDate)+')'),...c.workouts.map(w=>w.name+' (team workout)')].join('; ');el('team-conflict-list').append(item);}
+ }
+ el('team-date').addEventListener('change',()=>{try{previewConflicts();}catch(e){status(e.message,true);}});
  function roster(ids=selected()){
   const athletes=VXTLocal.snapshot().athletes;el('team-athletes').replaceChildren();
   for(const a of athletes){const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.value=a.id;input.checked=ids.includes(a.id);input.addEventListener('change',count);label.append(input,document.createTextNode(a.name));el('team-athletes').append(label);}if(!athletes.length)el('team-athletes').textContent='Add athletes in Overview first.';count();
@@ -29,7 +37,7 @@
  el('team-all').addEventListener('click',()=>{el('team-athletes').querySelectorAll('input').forEach(i=>i.checked=true);count();});
  el('team-none').addEventListener('click',()=>{el('team-athletes').querySelectorAll('input').forEach(i=>i.checked=false);count();});
  el('team-cancel').addEventListener('click',()=>{reset();status('Changes cancelled.');});
- el('team-form').addEventListener('submit',e=>{e.preventDefault();el('team-save').disabled=true;try{const r=VXTTeam.build(VXTLocal.snapshot(),{id:editing,name:el('team-name').value,date:el('team-date').value,workout:el('team-workout').value,notes:el('team-notes').value,athleteIds:selected()},()=>crypto.randomUUID());const n=selected().length;VXTLocal.appendReviewed(r.data);reset();history(r.workoutId);status('Workout assigned to '+n+' athletes. See the expanded workout below.');}catch(e){status(e.message,true);}finally{el('team-save').disabled=false;}});
+ el('team-form').addEventListener('submit',e=>{e.preventDefault();el('team-save').disabled=true;try{const r=VXTTeam.build(VXTLocal.snapshot(),{id:editing,name:el('team-name').value,date:el('team-date').value,workout:el('team-workout').value,notes:el('team-notes').value,athleteIds:selected(),conflictPolicy:el('team-conflict-policy').value},()=>crypto.randomUUID());const n=r.assignedCount;VXTLocal.appendReviewed(r.data);reset();history(r.workoutId);status('Workout assigned to '+n+' athletes. '+(r.skippedCount?r.skippedCount+' conflicting athletes skipped. ':'')+'See the expanded workout below.');}catch(e){status(e.message,true);}finally{el('team-save').disabled=false;}});
  document.querySelector('[data-tab="team"]').addEventListener('click',()=>{try{roster();history();}catch(e){status(e.message,true);}});
  try{reset();}catch(e){status(e.message,true);}
 })();

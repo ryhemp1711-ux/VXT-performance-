@@ -133,3 +133,7 @@ Assignments and completion persist in local storage, backups and manual cloud tr
 ## v0.11.1 — Grouped training navigation
 
 Open Training sessions for Session log, Training blocks, and Team training. The three sections share a secondary navigation bar; existing saved data and forms are retained when switching sections.
+
+## v0.11.2 — Team scheduling conflicts
+
+Team training checks selected athletes against explicitly assigned training blocks (inclusive start/end dates) and other team workouts on the same date. The current workout is excluded during editing. Choose Skip conflicting athletes or Include anyway to save when conflicts exist; skipping everyone leaves the form and existing records intact. Changing the date or selection requires a fresh choice. General blocks with no assigned athletes do not imply roster-wide assignments. Blocks contain weekly free text, so a date-range overlap is a warning, not proof of a daily workout. New or edited blocks do not retroactively remove team assignments.
