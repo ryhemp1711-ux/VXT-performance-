@@ -45,7 +45,7 @@
     for(let rep=1;rep<=reps;rep++){const name='tempoTime'+set+'_'+rep;const input=control('Rep '+rep+' time (seconds, optional)',name,'number',group);input.value=previous[name]||'';input.disabled=event.value!=='Tempo';}
    }
   }
-  tempoSets.addEventListener('change',updateTempo);tempoReps.addEventListener('change',updateTempo);tempoDistance.addEventListener('change',updateTempo);
+  tempoSets.addEventListener('input',updateTempo);tempoReps.addEventListener('input',updateTempo);tempoDistance.addEventListener('input',updateTempo);
   const hard=document.createElement('div');row.append(hard);
   const hardInstructions=document.createElement('p');hardInstructions.textContent='Run 100m, walk back 50m, repeat until you reach the end of the 400m lap. Seven 100m runs and six 50m walk-backs: 700m running, 300m walking. No walk-back after run 7. Times are optional; running time excludes walking. This is not a continuous 400m result.';hard.append(hardInstructions);
   for(let i=0;i<7;i++){
