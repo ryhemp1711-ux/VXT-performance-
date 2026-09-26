@@ -36,6 +36,13 @@ function validateData(data){
  if(!data||data.version!==1||!Array.isArray(data.athletes)||!Array.isArray(data.results)||!Array.isArray(data.predictions))throw Error('Not a VXT version 1 backup.');
  if(data.athletes.length>5000||data.results.length>100000||data.predictions.length>100000)throw Error('Backup is too large.');
  const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');ids.add(a.id);}
+ if(data.teamWorkouts!=null){
+  if(!Array.isArray(data.teamWorkouts)||data.teamWorkouts.length>5000)throw Error('Invalid team workouts.');
+  const workoutIds=new Set();for(const w of data.teamWorkouts){
+   if(!w||typeof w.id!=='string'||!w.id||workoutIds.has(w.id)||typeof w.name!=='string'||!w.name.trim()||w.name.length>100||typeof w.date!=='string'||w.date.length!==10||normalizeDate(w.date)!==w.date||typeof w.workout!=='string'||!w.workout.trim()||w.workout.length>10000||typeof w.notes!=='string'||w.notes.length>2000||!Array.isArray(w.assignments)||w.assignments.length>5000)throw Error('Invalid team workout.');
+   const assigned=new Set();for(const a of w.assignments){if(!a||!ids.has(a.athleteId)||assigned.has(a.athleteId)||typeof a.completed!=='boolean')throw Error('Invalid team workout assignment.');assigned.add(a.athleteId);}workoutIds.add(w.id);
+  }
+ }
  if(data.trainingBlocks!=null){
   if(!Array.isArray(data.trainingBlocks)||data.trainingBlocks.length>1000)throw Error('Invalid training blocks.');
   const blockIds=new Set();
