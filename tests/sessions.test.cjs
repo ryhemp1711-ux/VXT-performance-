@@ -38,16 +38,26 @@ test('hard-way invalid times, incomplete structure and corrupt backup totals are
  const bad=JSON.parse(JSON.stringify(r.data));bad.sessions[0].efforts[0].segments[6].walkBackDistance=50;assert.throws(()=>V.validateData(bad));
 });
 test('tempo retains sets, rep times and separate rests without race results',()=>{
- const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',sets:2,repsPerSet:5,tempoDistance:100,repRest:60,setRest:180,times:Array(10).fill(19)}],id());
+ const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',category:'Extensive',sets:2,repsPerSet:5,tempoDistance:100,repRest:60,setRest:180,times:Array(10).fill(19)}],id());
  const e=r.data.sessions[0].efforts[0];assert.equal(e.runningDistance,1000);assert.equal(e.runningTime,190);assert.equal(e.repRest,60);assert.equal(e.setRest,180);assert.equal(r.records,0);assert.equal(V.savedBest(r.data.results,'a','100m'),null);
  assert.deepEqual(V.validateData(JSON.parse(JSON.stringify(r.data))),r.data);
 });
 test('tempo supports untimed and partially timed runs, zero rest, and a single run',()=>{
- for(const times of [Array(10).fill(''),[18,...Array(9).fill('')]]){const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',sets:2,repsPerSet:5,tempoDistance:100,repRest:0,times}],id());const e=r.data.sessions[0].efforts[0];assert.equal(e.runningTime,null);assert.equal(e.repRest,0);assert.equal(e.setRest,null);V.validateData(JSON.parse(JSON.stringify(r.data)));}
- const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',sets:1,repsPerSet:1,tempoDistance:200,repRest:60,setRest:180,times:[32]}],id());const e=r.data.sessions[0].efforts[0];assert.equal(e.repRest,null);assert.equal(e.setRest,null);assert.equal(e.runningDistance,200);assert.equal(e.runningTime,32);
+ for(const times of [Array(10).fill(''),[18,...Array(9).fill('')]]){const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',category:'Extensive',sets:2,repsPerSet:5,tempoDistance:100,repRest:0,times}],id());const e=r.data.sessions[0].efforts[0];assert.equal(e.runningTime,null);assert.equal(e.repRest,0);assert.equal(e.setRest,null);V.validateData(JSON.parse(JSON.stringify(r.data)));}
+ const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',category:'Extensive',sets:1,repsPerSet:1,tempoDistance:200,repRest:60,setRest:180,times:[32]}],id());const e=r.data.sessions[0].efforts[0];assert.equal(e.repRest,null);assert.equal(e.setRest,null);assert.equal(e.runningDistance,200);assert.equal(e.runningTime,32);
 });
 test('tempo rejects invalid configuration, times, rests and corrupt backup totals',()=>{
- const rep={athleteId:'a',event:'Tempo',sets:2,repsPerSet:5,tempoDistance:100,times:Array(10).fill(19)};
+ const rep={athleteId:'a',event:'Tempo',category:'Extensive',sets:2,repsPerSet:5,tempoDistance:100,times:Array(10).fill(19)};
  for(const patch of [{sets:0},{sets:1.5},{sets:21},{repsPerSet:0},{repsPerSet:51},{sets:20,repsPerSet:50},{tempoDistance:0},{repRest:-1},{setRest:-1},{times:[19]},{times:Array(10).fill(-1)}])assert.throws(()=>S.build(base(),details,[{...rep,...patch}],id()));
  const r=S.build(base(),details,[rep],id());for(const key of ['runningDistance','runningTime','sets']){const bad=JSON.parse(JSON.stringify(r.data));bad.sessions[0].efforts[0][key]++;assert.throws(()=>V.validateData(bad));}
+});
+
+test('tempo category is preserved and validated',()=>{const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',category:'Intensive',sets:1,repsPerSet:1,tempoDistance:200,times:[32]}],id());assert.equal(r.data.sessions[0].efforts[0].category,'Intensive');assert.throws(()=>S.build(base(),details,[{athleteId:'a',event:'Tempo',category:'Wrong',sets:1,repsPerSet:1,tempoDistance:200,times:[32]}],id()));});
+
+test('legacy tempo without category remains readable and new categories survive backup validation',()=>{
+ const r=S.build(base(),details,[{athleteId:'a',event:'Tempo',category:'Extensive',sets:1,repsPerSet:1,tempoDistance:100,times:[19]}],id());
+ const legacy=JSON.parse(JSON.stringify(r.data));delete legacy.sessions[0].efforts[0].category;
+ assert.deepEqual(V.validateData(legacy),legacy);
+ for(const category of ['Extensive','Intensive']){const copy=JSON.parse(JSON.stringify(r.data));copy.sessions[0].efforts[0].category=category;assert.equal(V.validateData(copy).sessions[0].efforts[0].category,category);}
+ const invalid=JSON.parse(JSON.stringify(r.data));invalid.sessions[0].efforts[0].category='Other';assert.throws(()=>V.validateData(invalid));
 });

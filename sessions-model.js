@@ -25,6 +25,7 @@ function build(data,details,reps,newId){
   const effort={id:repId,athleteId:rep.athleteId,repNumber,event:rep.event,notes:String(rep.notes||'').trim(),restAfter:number(rep.restAfter,prefix+'rest after rep (seconds)',{max:86400})};
   if(effort.notes.length>500)throw Error(prefix+'rep notes must be 500 characters or fewer.');
   if(rep.event==='Tempo'){
+   effort.category=rep.category||'Extensive';if(!['Extensive','Intensive'].includes(effort.category))throw Error(prefix+'choose Extensive or Intensive tempo.');
    effort.sets=number(rep.sets,prefix+'tempo sets',{min:1,max:20,required:true,integer:true});
    effort.repsPerSet=number(rep.repsPerSet,prefix+'tempo reps per set',{min:1,max:50,required:true,integer:true});
    const count=effort.sets*effort.repsPerSet;if(count>200)throw Error(prefix+'tempo is limited to 200 runs per entry.');

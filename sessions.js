@@ -27,6 +27,7 @@
   span.textContent='Enter uniform spacing. For 6 ft 9 in, enter 6.75 ft. Run-in is not included in the wicket span.';
   const tempo=document.createElement('div');row.append(tempo);
   const tempoIntro=document.createElement('p');tempoIntro.textContent='Tempo uses repeated runs at a controlled training pace. Edit sets, reps and distance; times and recovery durations are optional. Between-set recovery replaces between-rep recovery at the end of each set. Tempo stays in the session and does not feed race bests or the predictor.';tempo.append(tempoIntro);
+  const tempoCategory=control('Tempo category','tempoCategory','select',tempo,['Extensive','Intensive']);tempoCategory.value='Extensive';
   const tempoSets=control('Tempo sets','tempoSets','number',tempo);tempoSets.step='1';tempoSets.value='2';
   const tempoReps=control('Reps per set','tempoReps','number',tempo);tempoReps.step='1';tempoReps.value='5';
   const tempoDistance=control('Distance per rep (meters)','tempoDistance','number',tempo);tempoDistance.value='100';
@@ -93,7 +94,7 @@
    const notes=document.createElement('p');notes.textContent=[session.method,session.notes].filter(Boolean).join(' · ');section.append(notes);
    for(const effort of entries){
     const athlete=data.athletes.find(a=>a.id===effort.athleteId);let detail='';
-    if(effort.event==='Tempo')detail=`${effort.sets} × ${effort.repsPerSet} × ${effort.distance}m · ${effort.runningDistance}m running`+(effort.repsPerSet>1?` · rest between reps ${seconds(effort.repRest)}`:'')+(effort.sets>1?` · rest between sets ${seconds(effort.setRest)} (replaces rep rest)`:'')+' · '+Array.from({length:effort.sets},(_,set)=>'set '+(set+1)+': '+effort.times.slice(set*effort.repsPerSet,(set+1)*effort.repsPerSet).map((t,i)=>'rep '+(i+1)+' '+seconds(t)).join(', ')).join(' · ')+(effort.runningTime==null?'':` · running time ${seconds(effort.runningTime)} (rest excluded)`);
+    if(effort.event==='Tempo')detail=`${effort.category||'Unspecified'} tempo · ${effort.sets} × ${effort.repsPerSet} × ${effort.distance}m · ${effort.runningDistance}m running`+(effort.repsPerSet>1?` · rest between reps ${seconds(effort.repRest)}`:'')+(effort.sets>1?` · rest between sets ${seconds(effort.setRest)} (replaces rep rest)`:'')+' · '+Array.from({length:effort.sets},(_,set)=>'set '+(set+1)+': '+effort.times.slice(set*effort.repsPerSet,(set+1)*effort.repsPerSet).map((t,i)=>'rep '+(i+1)+' '+seconds(t)).join(', ')).join(' · ')+(effort.runningTime==null?'':` · running time ${seconds(effort.runningTime)} (rest excluded)`);
     else if(effort.event==='400 the hard way')detail='400m net progress · 700m running · 300m walking · '+effort.segments.map((p,i)=>`run ${i+1}: 100m ${seconds(p.time)}${i<6?' → walk back 50m'+(p.walkBackTime==null?'':' in '+seconds(p.walkBackTime)):''}`).join(' · ')+(effort.runningTime==null?'':` · running time ${seconds(effort.runningTime)} (walking excluded)`);
     else if(effort.event==='Sled push')detail=`${effort.distance}m · time ${seconds(effort.time)}`+(effort.load==null?'':` · load ${effort.load} ${effort.loadUnit}`);
     else if(effort.event==='Wicket run')detail=`${effort.wicketCount} wickets · ${effort.spacing} ${effort.spacingUnit} apart · span ${effort.wicketSpanMeters.toFixed(2)}m · time ${seconds(effort.time)}`;
@@ -114,7 +115,7 @@
     const v=name=>field(row,name)?.value||'';
     const rep={athleteId:v('athleteId'),event:v('event'),time:v('time'),notes:v('notes'),restAfter:v('restAfter'),distance:v('distance'),load:v('load'),loadUnit:v('loadUnit'),wicketCount:v('wicketCount'),spacing:v('spacing'),spacingUnit:v('spacingUnit'),splits:Object.fromEntries([10,20,30,60].filter(d=>!field(row,'split'+d).disabled).map(d=>[d,v('split'+d)]))};
     if(rep.event==='Tempo'){
-     rep.sets=v('tempoSets');rep.repsPerSet=v('tempoReps');rep.tempoDistance=v('tempoDistance');rep.repRest=v('tempoRepRest');rep.setRest=v('tempoSetRest');
+     rep.category=v('tempoCategory');rep.sets=v('tempoSets');rep.repsPerSet=v('tempoReps');rep.tempoDistance=v('tempoDistance');rep.repRest=v('tempoRepRest');rep.setRest=v('tempoSetRest');
      const sets=Number(rep.sets),reps=Number(rep.repsPerSet);
      rep.times=Number.isInteger(sets)&&Number.isInteger(reps)&&sets>0&&sets<=20&&reps>0&&reps<=50&&sets*reps<=200?Array.from({length:sets*reps},(_,i)=>v('tempoTime'+(Math.floor(i/reps)+1)+'_'+(i%reps+1))):[];
     }
