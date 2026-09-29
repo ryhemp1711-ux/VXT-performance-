@@ -1,5 +1,6 @@
 (function(root){
 'use strict';
+const Video=typeof module!=='undefined'&&module.exports?require('./video-model.js'):root.VXTVideo;
 const profiles={speed:[2.08,2.20,1.28,1.15],balanced:[2.04,2.16,1.24,.85],endurance:[2.02,2.12,1.20,.60],developing:[2.10,2.24,1.35,1.45]};
 const levels={youth:[.08,.12,.08],developing:[.05,.08,.05],competitive:[.03,.04,.03],advanced:[0,0,0],elite:[-.01,-.03,-.02]};
 function positive(x,label,optional=false){if(optional&&(x===''||x==null))return null;const n=Number(x);if(!Number.isFinite(n)||n<=0)throw Error(label+' must be a positive time in seconds.');return n;}
@@ -53,6 +54,7 @@ function validateData(data){
  const validText=(s,max)=>typeof s==='string'&&s.length<=max;
  const list=(key,max)=>{if(data[key]==null)return [];if(!Array.isArray(data[key])||data[key].length>max)throw Error('Invalid '+key+'.');return data[key];};
  const unique=(rows)=>{const seen=new Set();for(const row of rows){if(!row||typeof row.id!=='string'||!row.id||seen.has(row.id))throw Error('Invalid or duplicate record ID.');seen.add(row.id);}};
+ const videos=list('videoReviews',10000);unique(videos);for(const r of videos)Video.validate(r,ids);
  const groups=list('trainingGroups',1000);unique(groups);for(const g of groups){if(!validText(g.name,100)||!g.name.trim()||!Array.isArray(g.athleteIds)||new Set(g.athleteIds).size!==g.athleteIds.length||g.athleteIds.some(id=>!ids.has(id)))throw Error('Invalid training group.');}
  const prescription=p=>{if(!p||!['10m','20m','30m','55m','60m','100m','150m','200m','250m','300m','350m','400m','450m','500m','Fly 10m','Fly 20m','Fly 30m','Sled push','Wicket run','Tempo','400 the hard way','Broken 200m','Broken 300m','Broken 400m'].includes(p.event)||!Number.isInteger(p.reps)||p.reps<1||p.reps>20||(p.restAfter!==null&&(typeof p.restAfter!=='number'||!Number.isFinite(p.restAfter)||p.restAfter<0||p.restAfter>86400)))throw Error('Invalid planned rep settings.');};
  const templates=list('workoutTemplates',1000);unique(templates);for(const t of templates){if(!validText(t.name,100)||!t.name.trim()||!validText(t.workout,10000)||!t.workout.trim()||!validText(t.notes,2000))throw Error('Invalid workout template.');prescription(t);}
