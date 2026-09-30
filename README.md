@@ -189,3 +189,10 @@ Videos are accessed via temporary local object URLs, never uploaded, stored in l
 Validation: 90 automated tests, including wicket-gap calculations, partial zones, withholding speed for unconfirmed recordings, invalid timing/source/athlete rejection, backup round-trip and safe review Undo. Browser QA is recorded separately; an emulated mobile viewport is not a physical iPhone test.
 
 Additional v0.15 DOM integration checks passed for navigation, simulated video-metadata loading, marking/stepping/playback-rate controls, lane calibration, save/update without duplicates, workspace replacement, reopening, wrong-file rejection, athlete reports, and both review/athlete deletion with Undo. These checks simulate media metadata; they do not verify real decoding or mobile layout. Browser downloads were unavailable in the build environment, so actual video playback and physical iPhone/Safari checks remain outstanding.
+
+
+## v0.16 — Athlete profiles
+
+Open **Athletes → Athlete profile** or choose **Profile** beside a roster athlete. Each profile stores a roster name, preferred name, pronouns (optional), birth year (optional), grade/level, team/club, events, goals and coach notes. Preferred name and team appear in the roster; profile details and goals appear in athlete reports.
+
+Profile data stays linked to the athlete ID, is included in JSON backups and manual cloud sync, and is removed when the athlete is deleted. Existing v0.15 workspaces remain valid. This release adds profile records to the coach workspace; athlete sign-in, invitations and restricted athlete permissions remain a later access-control layer.

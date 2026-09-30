@@ -1,6 +1,7 @@
 (function(root){
 'use strict';
 const Video=typeof module!=='undefined'&&module.exports?require('./video-model.js'):root.VXTVideo;
+const Profile=typeof module!=='undefined'&&module.exports?require('./profile-model.js'):root.VXTProfile;
 const profiles={speed:[2.08,2.20,1.28,1.15],balanced:[2.04,2.16,1.24,.85],endurance:[2.02,2.12,1.20,.60],developing:[2.10,2.24,1.35,1.45]};
 const levels={youth:[.08,.12,.08],developing:[.05,.08,.05],competitive:[.03,.04,.03],advanced:[0,0,0],elite:[-.01,-.03,-.02]};
 function positive(x,label,optional=false){if(optional&&(x===''||x==null))return null;const n=Number(x);if(!Number.isFinite(n)||n<=0)throw Error(label+' must be a positive time in seconds.');return n;}
@@ -50,7 +51,7 @@ function schedulingConflicts(data,input){
 function validateData(data){
  if(!data||data.version!==1||!Array.isArray(data.athletes)||!Array.isArray(data.results)||!Array.isArray(data.predictions))throw Error('Not a VXT version 1 backup.');
  if(data.athletes.length>5000||data.results.length>100000||data.predictions.length>100000)throw Error('Backup is too large.');
- const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');ids.add(a.id);}
+ const ids=new Set();for(const a of data.athletes){if(!a||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100)throw Error('Invalid athlete record.');Profile.validate(a.profile);ids.add(a.id);}
  const validText=(s,max)=>typeof s==='string'&&s.length<=max;
  const list=(key,max)=>{if(data[key]==null)return [];if(!Array.isArray(data[key])||data[key].length>max)throw Error('Invalid '+key+'.');return data[key];};
  const unique=(rows)=>{const seen=new Set();for(const row of rows){if(!row||typeof row.id!=='string'||!row.id||seen.has(row.id))throw Error('Invalid or duplicate record ID.');seen.add(row.id);}};

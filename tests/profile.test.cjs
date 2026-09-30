@@ -1,0 +1,6 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const P=require('../profile-model.js'),V=require('../model.js');
+test('profile accepts coaching details and preferred display name',()=>{const p=P.validate({preferredName:'AJ',grade:'4th grade',team:'McKim Track Club',events:'100m, 200m',goals:'Sub-32 200m',notes:'Keep volume low'});assert.equal(P.displayName({name:'Aria',profile:p}),'AJ');assert.equal(p.team,'McKim Track Club');});
+test('profile rejects invalid birth year and oversized fields',()=>{assert.throws(()=>P.validate({birthYear:'20'}),/Birth year/);assert.throws(()=>P.validate({goals:'x'.repeat(1001)}),/goals/);});
+test('profiles round-trip through the workspace validator and remain optional for old records',()=>{const d={version:1,athletes:[{id:'a',name:'Aria',profile:{preferredName:'AJ',grade:'4th grade'}}],results:[],predictions:[]};assert.deepEqual(V.validateData(JSON.parse(JSON.stringify(d))),d);const old={version:1,athletes:[{id:'a',name:'Aria'}],results:[],predictions:[]};assert.deepEqual(V.validateData(old),old);});
+test('profile fields reject unexpected values',()=>{assert.throws(()=>P.validate({team:4}),/profile team/);assert.throws(()=>P.validate([]),/profile/);});
