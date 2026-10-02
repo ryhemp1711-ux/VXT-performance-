@@ -17,3 +17,9 @@
 #video-player{display:block;width:100%;max-height:65vh;background:#111d1c;border-radius:10px;margin:16px 0}#video article{min-width:0}#video input,#video select{min-width:0;max-width:100%}.video-controls{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.video-controls label{flex:1 1 160px}.video-controls button{min-height:44px}#video-metrics{display:block;background:#e9efdf;border-radius:8px;padding:16px;margin:16px 0;line-height:1.6}#video-status:not(:empty){padding:12px;background:#edf2e7;border-radius:8px}#video-history button{margin:4px 8px 4px 0}#video p{overflow-wrap:anywhere}#video button:disabled{opacity:.45;cursor:not-allowed}
 
 #roster .roster-row>span{display:flex;flex-direction:column;gap:4px}#profile-badges{display:grid;gap:12px}.profile-card{background:#e9efdf;border-radius:8px;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Local biomechanics samples retain the video's aspect ratio on narrow screens. */
+#bio-panel{margin:1.25rem 0;min-width:0;padding:1rem;border:1px solid #617474;border-radius:12px}
+#bio-canvas{display:block;width:100%;height:auto;margin:1rem 0;background:#111718}
+#bio-canvas[hidden]{display:none}
+#bio-results{line-height:1.7;overflow-wrap:anywhere}
