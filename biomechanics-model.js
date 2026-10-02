@@ -12,6 +12,11 @@ function measure(frame,width,height,side){
  const s=p[11+i],h=p[23+i];
  return {knee:joint(23+i,25+i,27+i),hip:joint(11+i,23+i,25+i),elbow:joint(11+i,13+i,15+i),trunk:s&&h&&Math.hypot(s.x-h.x,s.y-h.y)>1e-8?Math.atan2(Math.abs(s.x-h.x),h.y-s.y)*180/Math.PI:null};
 }
+function cropArea(zoom,cx,cy){
+ if(![1,2,3,4].includes(zoom)||!finite(cx,0,1)||!finite(cy,0,1))throw Error('Choose a valid analysis zoom and center.');
+ const size=1/zoom;return {x:Math.max(0,Math.min(1-size,cx-size/2)),y:Math.max(0,Math.min(1-size,cy-size/2)),width:size,height:size};
+}
+function mapPoses(poses,crop){return poses.map(points=>points.map(p=>finite(p.x,0,1)&&finite(p.y,0,1)?{...p,x:crop.x+p.x*crop.width,y:crop.y+p.y*crop.height}:{...p,x:0,y:0,visibility:0,presence:0}));}
 function frame(time,poses){
  if(poses.length!==1)return {time,reason:poses.length?'multiple-people':'no-person',points:[]};
  const points=poses[0].map(p=>({x:p.x,y:p.y,visibility:p.visibility??0,presence:p.presence??0}));
@@ -20,11 +25,12 @@ function frame(time,poses){
 }
 function validate(b,r){
  if(!b||b.version!==1||b.engine!==ENGINE||b.confirmed!==true||b.view!=='side'||!['left','right'].includes(b.side)||!finite(b.width,1,16384)||!finite(b.height,1,16384)||!Number.isInteger(b.width)||!Number.isInteger(b.height)||b.start!==r.start||b.end!==r.end||!Array.isArray(b.frames)||b.frames.length<1||b.frames.length>51)throw Error('Invalid biomechanics analysis. Reanalyze the marked segment and confirm the tracking.');
+ if(b.crop!==undefined){const c=b.crop;if(!c||!finite(c.x,0,1)||!finite(c.y,0,1)||!finite(c.width,.25,1)||!finite(c.height,.25,1)||c.x+c.width>1.000001||c.y+c.height>1.000001)throw Error('Invalid analysis crop.');}
  let prev=-1;
  for(const f of b.frames){if(!f||!finite(f.time,r.start,r.end)||f.time<=prev||!['','no-person','multiple-people'].includes(f.reason)||!Array.isArray(f.points)||f.points.length!==(f.reason?0:33))throw Error('Invalid biomechanics frame.');prev=f.time;for(const p of f.points)if(!p||!finite(p.x,0,1)||!finite(p.y,0,1)||!finite(p.visibility,0,1)||!finite(p.presence,0,1))throw Error('Invalid body landmark.');}
  return b;
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
 function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
-const api={ENGINE,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
+const api={ENGINE,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
 })(globalThis);
