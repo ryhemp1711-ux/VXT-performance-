@@ -1,0 +1,25 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const B=require('../biomechanics-model.js');
+function setup({failure=false,pending=false,noPerson=false}={}){
+ class Element extends EventTarget{
+  constructor(){super();this.value='';this.checked=false;this.disabled=false;this.textContent='';this.children=[];this.hidden=false;this.readyState=2;this.duration=4;this.videoWidth=640;this.videoHeight=360;this.seeking=false;this._time=1;}
+  append(x){this.children.push(x);if(this.children.length===1)this.value=String(x.value);}
+  replaceChildren(){this.children=[];this.value='';}getContext(){return {clearRect(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},arc(){},fill(){}};}
+  getAttribute(){return 'blob:local';}pause(){}get currentTime(){return this._time;}set currentTime(t){this._time=t;queueMicrotask(()=>this.dispatchEvent(new Event('seeked')));}
+ }
+ const elements=new Map(),document=new EventTarget();document.getElementById=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};document.createElement=()=>new Element();
+ const el=document.getElementById;el('video-start').value='1';el('video-end').value='1.4';el('video-athlete').value='a';el('bio-side').value='left';el('bio-side-view').checked=true;el('bio-zoom').value='1';el('bio-center-x').value='50';el('bio-center-y').value='50';
+ let release;const blocked=new Promise(r=>release=r);const detector={detect(){return {landmarks:noPerson?[]:[Array.from({length:33},(_,i)=>({x:.2+i*.01,y:.2+i*.01,visibility:1,presence:1}))]};}};
+ const fake={FilesetResolver:{forVisionTasks:async()=>({})},PoseLandmarker:{createFromOptions:async()=>{if(failure)throw Error('offline');if(pending)await blocked;return detector;}}};
+ const context={document,window:{},VXTBiomechanics:B,Event,structuredClone,setTimeout,clearTimeout,TestVision:fake};context.globalThis=context;
+ const source=fs.readFileSync(require.resolve('../biomechanics.js'),'utf8').replace("import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs')",'Promise.resolve(TestVision)');
+ vm.runInNewContext(source,context);return {el,api:context.window.VXTBiomechanicsEditor,release};
+}
+const click=el=>el.dispatchEvent(new Event('click'));
+async function until(fn){for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,2));}throw Error('Timed out');}
+test('analysis requires coach confirmation; athlete/marker changes discard measurements',async()=>{const {el,api}=setup();click(el('bio-run'));await until(()=>el('bio-status').textContent.startsWith('Analysis ready'));assert.throws(()=>api.getData(),/confirm/);el('bio-confirm').checked=true;const saved=api.getData();assert.equal(saved.frames.length,3);assert.equal(saved.engine,B.ENGINE);assert.equal(el('video-start').disabled,false);api.restore(saved);assert.equal(JSON.stringify(api.getData()),JSON.stringify(saved));el('video-start').dispatchEvent(new Event('input'));assert.equal(api.getData(),undefined);api.restore(saved);el('video-athlete').dispatchEvent(new Event('change'));assert.equal(api.getData(),undefined);});
+test('preflight and unavailable model errors are visible; ordinary review remains usable',async()=>{let x=setup();x.el('bio-side-view').checked=false;click(x.el('bio-run'));assert.match(x.el('bio-status').textContent,/side-on/);x=setup({failure:true});click(x.el('bio-run'));await until(()=>x.el('bio-status').textContent.includes('offline'));assert.equal(x.api.getData(),undefined);assert.equal(x.el('video-file').disabled,false);assert.equal(x.el('bio-run').disabled,false);});
+test('canceling an in-flight model load suppresses stale analysis results',async()=>{const {el,api,release}=setup({pending:true});click(el('bio-run'));assert.throws(()=>api.getData(),/Wait/);click(el('bio-cancel'));release();await new Promise(r=>setTimeout(r,10));assert.equal(api.getData(),undefined);assert.equal(el('bio-status').textContent,'Analysis canceled.');assert.equal(el('video-player').controls,true);});
+
+test('no detections shows retry guidance and cannot be confirmed as a successful analysis',async()=>{const {el,api}=setup({noPerson:true});click(el('bio-run'));await until(()=>el('bio-status').textContent.startsWith('Body not detected'));assert.match(el('bio-status').textContent,/Analysis zoom/);assert.equal(el('bio-confirm').disabled,true);el('bio-confirm').checked=true;assert.throws(()=>api.getData(),/No usable/);click(el('bio-remove'));assert.equal(api.getData(),undefined);});
+test('zoomed detection maps back to the video and changing the crop invalidates results',async()=>{const {el,api}=setup();el('bio-zoom').value='2';click(el('bio-run'));await until(()=>el('bio-status').textContent.startsWith('Analysis ready'));el('bio-confirm').checked=true;const saved=api.getData();assert.equal(saved.crop.x,.25);assert.equal(saved.frames[0].points[0].x,.35);el('bio-center-x').dispatchEvent(new Event('input'));assert.equal(api.getData(),undefined);});
