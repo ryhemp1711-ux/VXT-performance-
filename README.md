@@ -230,3 +230,7 @@ Auto-find now uses shorter, overlapping tiles so small athletes near the track a
 ## Biomechanics test page v0.17.7 — tuned scan geometry
 
 The auto-find tiles are tuned for the uploaded wide-track footage: six smaller lower-frame windows provide more athlete pixels while retaining horizontal overlap and full track-height coverage. The page cache key is refreshed so phones load the updated detector scan.
+
+## Biomechanics test page v0.17.8 — motion-assisted auto-find
+
+When pose inference returns no consistent candidates, Auto-find now compares the sampled video pixels, follows a smoothly moving subject across the track, and selects that moving area as a reviewable crop. It never silently treats motion as a successful pose measurement; the user still reviews the crop and runs normal pose analysis afterward.
