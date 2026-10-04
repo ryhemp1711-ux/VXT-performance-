@@ -5,7 +5,8 @@
  const engines=new Map();let inputImages=[];let selectedCrop=null,boxStart=null,boxPointer=null;
  const boxCanvas=$('box-canvas'),boxCtx=boxCanvas.getContext('2d');
  const canvas=$('canvas'),ctx=canvas.getContext('2d');
- const cropSettings=()=>selectedCrop||B.cropArea(Number($('zoom').value),Number($('center-x').value)/100,Number($('center-y').value)/100);
+ const cropSettings=()=>selectedCrop||B.cropArea([1,2,3,4].includes(Number($('zoom').value))?Number($('zoom').value):1,Number.isFinite(Number($('center-x').value))?Number($('center-x').value)/100:.5,Number.isFinite(Number($('center-y').value))?Number($('center-y').value)/100:.5);
+ const inferenceSize=(sourceWidth,sourceHeight)=>{const minSide=640,maxSide=1280,scale=Math.max(1,minSide/Math.min(sourceWidth,sourceHeight));const capped=Math.min(scale,maxSide/Math.max(sourceWidth,sourceHeight));return {width:Math.max(1,Math.round(sourceWidth*capped)),height:Math.max(1,Math.round(sourceHeight*capped)),scale:capped};};
  const status=s=>$('status').textContent=s;
  const changed=()=>document.dispatchEvent(new Event('vxt-biomechanics-change'));
  function clearPreview(){ctx.clearRect(0,0,canvas.width,canvas.height);canvas.hidden=true;}
@@ -72,7 +73,7 @@
    stage='model loading';
    status('Loading body-position model… First use requires internet; video remains on this device.');
    const detector=await load(model);if(token!==generation)return;
-   const capture=document.createElement('canvas');capture.width=Math.max(1,Math.round(width*crop.width));capture.height=Math.max(1,Math.round(height*crop.height));const captureCtx=capture.getContext('2d');const frames=[],count=Math.min(51,Math.ceil((end-start)*5)+1);
+   const sourceCropWidth=Math.max(1,Math.round(width*crop.width)),sourceCropHeight=Math.max(1,Math.round(height*crop.height)),inputSize=inferenceSize(sourceCropWidth,sourceCropHeight);const capture=document.createElement('canvas');capture.width=inputSize.width;capture.height=inputSize.height;const captureCtx=capture.getContext('2d');const frames=[],count=Math.min(51,Math.ceil((end-start)*5)+1);
    for(let i=0;i<count;i++){
     stage='video decoding / seeking';const time=start+(end-start)*i/(count-1);await seek(time,token);if(token!==generation)return;
     stage='body detection';captureCtx.drawImage(video,width*crop.x,height*crop.y,width*crop.width,height*crop.height,0,0,capture.width,capture.height);const inputResult=inspectInput(capture,i,count,time,model);let result;try{result=detector.detect(capture);if(inputResult)inputResult.textContent=`Detector returned ${result.landmarks.length} pose(s) for this input.`;}catch(e){if(inputResult)inputResult.textContent='Detector call failed: '+e.message;throw e;}frames.push(B.frame(time,B.mapPoses(result.landmarks,crop)));
