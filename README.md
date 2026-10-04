@@ -234,3 +234,7 @@ The auto-find tiles are tuned for the uploaded wide-track footage: six smaller l
 ## Biomechanics test page v0.17.8 — motion-assisted auto-find
 
 When pose inference returns no consistent candidates, Auto-find now compares the sampled video pixels, follows a smoothly moving subject across the track, and selects that moving area as a reviewable crop. It never silently treats motion as a successful pose measurement; the user still reviews the crop and runs normal pose analysis afterward.
+
+## Biomechanics test page v0.17.9 — guided fallback analysis
+
+If both pose and motion scans are inconclusive, Auto-find now selects a clearly labeled lower-track review area instead of ending with an unusable error. The normal Analyze action still determines whether pose measurements are actually usable; users can replace the suggestion with Draw athlete box.
