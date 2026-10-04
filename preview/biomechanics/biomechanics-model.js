@@ -22,6 +22,16 @@ function boxCrop(a,b){
  const c={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x),height:Math.abs(a.y-b.y)};
  if(!validCrop(c))throw Error('Draw a larger box (at least 5% of the frame in each direction).');return c;
 }
+function autoScanCrops(){
+ const xs=[0,.225,.45],ys=[0,.3],width=.55,height=.7;
+ return ys.flatMap(y=>xs.map(x=>({x,y,width,height})));
+}
+function unionCrop(boxes,padX=.6,padY=.6){
+ if(!Array.isArray(boxes)||!boxes.length||boxes.some(c=>!validCrop(c)))throw Error('No athlete area was detected.');
+ const minX=Math.min(...boxes.map(c=>c.x)),minY=Math.min(...boxes.map(c=>c.y)),maxX=Math.max(...boxes.map(c=>c.x+c.width)),maxY=Math.max(...boxes.map(c=>c.y+c.height));
+ const width=maxX-minX,height=maxY-minY,x=Math.max(0,minX-width*padX),y=Math.max(0,minY-height*padY),right=Math.min(1,maxX+width*padX),bottom=Math.min(1,maxY+height*padY);
+ return {x,y,width:Math.max(.05,right-x),height:Math.max(.05,bottom-y)};
+}
 function diagnostics(frames,width,height,side,model='lite'){
  const total=frames.length,missing=frames.filter(f=>f.reason==='no-person').length,multiple=frames.filter(f=>f.reason==='multiple-people').length;
  const usable=frames.filter(f=>Object.values(measure(f,width,height,side)).some(v=>v!==null)).length;
@@ -44,5 +54,5 @@ function validate(b,r){
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
 function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.engine===ENGINES.full?'Full':'Lite'} model · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
-const api={ENGINE,ENGINES,validCrop,boxCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
+const api={ENGINE,ENGINES,validCrop,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
 })(globalThis);
