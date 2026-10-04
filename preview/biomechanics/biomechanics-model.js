@@ -25,7 +25,7 @@ function boxCrop(a,b){
 function autoScanCrops(){
  // The athlete is often only a few dozen pixels tall in a wide stadium shot.
  // Shorter tiles give the pose model more pixels without losing frame coverage.
- const xs=[0,.25,.5],ys=[0,.45],width=.5,height=.55;
+ const xs=[0,.275,.55],ys=[.3,.55],width=.45,height=.45;
  return ys.flatMap(y=>xs.map(x=>({x,y,width,height})));
 }
 function unionCrop(boxes,padX=.6,padY=.6){
