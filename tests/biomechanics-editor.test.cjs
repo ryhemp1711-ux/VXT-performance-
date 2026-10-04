@@ -3,6 +3,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const B=require('../preview/biomechanics/biomechanics-model.js');
 function editor(){
+ const captures=[];
  class Element {
   constructor(){this.value='';this.handlers={};this.hidden=false;this.disabled=false;this.checked=false;this.textContent='';this.options=[];}
   addEventListener(type,fn){(this.handlers[type]??=[]).push(fn);}
@@ -10,6 +11,7 @@ function editor(){
   async fire(type,data={}){for(const fn of this.handlers[type]||[])await fn({pointerId:1,button:0,preventDefault(){},...data});}
   append(x){this.options.push(x);if(this.options.length===1)this.value='0';}
   replaceChildren(){this.options=[];}
+  toDataURL(type){captures.push({kind:'snapshot',canvas:this,type});return 'data:image/png;base64,fixture';}
   getContext(){return new Proxy({},{get:()=>()=>{}});}
   getBoundingClientRect(){return {left:0,top:0,width:100,height:100};}
   setPointerCapture(id){this.capture=id;} hasPointerCapture(id){return this.capture===id;} releasePointerCapture(){this.capture=null;}
@@ -22,10 +24,10 @@ function editor(){
  let time=1;Object.defineProperty(video,'currentTime',{get:()=>time,set:v=>{time=v;queueMicrotask(()=>video.fire('seeked'));}});
  const points=Array.from({length:33},(_,i)=>({x:.2+(i%5)*.1,y:.1+Math.floor(i/5)*.1,visibility:.95,presence:.95}));
  const requests=[],state={fail:false,poses:[points]};
- const module={FilesetResolver:{forVisionTasks:async()=>({})},PoseLandmarker:{createFromOptions:async (files,options)=>{requests.push(options);if(state.fail)throw Error('fixture download failure');return {detect:()=>({landmarks:state.poses})};}}};
+ const module={FilesetResolver:{forVisionTasks:async()=>({})},PoseLandmarker:{createFromOptions:async (files,options)=>{requests.push(options);if(state.fail)throw Error('fixture download failure');return {detect:canvas=>{captures.push({kind:'detect',canvas});return {landmarks:state.poses};}};}}};
  const context={document:doc,VXTBiomechanics:B,window:{},Event:class{},structuredClone,performance,setTimeout,clearTimeout,__model:module};
  let source=fs.readFileSync('preview/biomechanics/biomechanics.js','utf8');source=source.replace(/await import\('[^']+'\)/,'await Promise.resolve(__model)');vm.runInNewContext(source,context);
- return {el,api:context.window.VXTBiomechanicsEditor,state,requests};
+ return {el,api:context.window.VXTBiomechanicsEditor,state,requests,captures};
 }
 test('box drawing, model choice, saving and restore preserve the selected source area',async()=>{
  const {el,api,requests}=editor();await el('bio-select-box').fire('click');assert.equal(el('bio-box-editor').hidden,false);
@@ -49,4 +51,17 @@ test('cancelled or tiny box selections leave the previous area intact; sliders r
  await el('bio-select-box').fire('click');await el('bio-box-canvas').fire('pointerdown',{clientX:10,clientY:10});await el('bio-box-canvas').fire('pointerup',{clientX:11,clientY:90});assert.match(el('bio-status').textContent,/Previous area kept/);
  el('bio-zoom').value='2';await el('bio-zoom').fire('input');assert.match(el('bio-box-status').textContent,/width 50%/);
  await el('bio-clear-box').fire('click');assert.match(el('bio-box-status').textContent,/width 100%/);
+});
+
+test('diagnostics snapshot the same canvas immediately before inference and retain zero-pose evidence',async()=>{
+ const {el,api,state,captures}=editor();state.poses=[];el('video-end').value='2';
+ await el('bio-run').fire('click');assert.equal(el('bio-input-panel').hidden,false);
+ const cards=el('bio-inputs').options;assert.equal(cards.length,3);
+ for(const index of [1,3,6])assert.match(cards[[1,3,6].indexOf(index)].options[0].textContent,new RegExp('Sample '+index+'/6'));
+ for(let i=0;i<captures.length;i++)if(captures[i].kind==='snapshot'){
+  assert.equal(captures[i+1].kind,'detect');assert.equal(captures[i].canvas,captures[i+1].canvas);assert.equal(captures[i].type,'image/png');
+ }
+ for(const card of cards)assert.match(card.options[2].textContent,/returned 0 pose/);
+ assert.match(cards[1].options[0].textContent,/identical pixels/);
+ api.reset();assert.equal(el('bio-input-panel').hidden,true);assert.equal(el('bio-inputs').options.length,0);
 });

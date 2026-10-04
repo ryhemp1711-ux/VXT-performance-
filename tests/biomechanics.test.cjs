@@ -28,3 +28,8 @@ test('diagnostics distinguish no person, multiple people, uncertain joints and u
  assert.equal(report.missing,1);assert.equal(report.multiple,1);assert.equal(report.uncertain,1);assert.equal(report.usable,1);
  assert.match(report.message,/not a sharpness measurement/);
 });
+
+test('Full failures direct users to captured inputs without suggesting Full again',()=>{
+ const report=B.diagnostics([B.frame(1,[])],1920,1080,'left','full');
+ assert.match(report.message,/captured detector inputs/);assert.doesNotMatch(report.message,/try Full/);
+});

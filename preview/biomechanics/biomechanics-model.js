@@ -22,11 +22,11 @@ function boxCrop(a,b){
  const c={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x),height:Math.abs(a.y-b.y)};
  if(!validCrop(c))throw Error('Draw a larger box (at least 5% of the frame in each direction).');return c;
 }
-function diagnostics(frames,width,height,side){
+function diagnostics(frames,width,height,side,model='lite'){
  const total=frames.length,missing=frames.filter(f=>f.reason==='no-person').length,multiple=frames.filter(f=>f.reason==='multiple-people').length;
  const usable=frames.filter(f=>Object.values(measure(f,width,height,side)).some(v=>v!==null)).length;
  const uncertain=total-missing-multiple-usable;
- return {total,missing,multiple,usable,uncertain,message:`${usable}/${total} samples have usable angles; ${missing} no athlete detected; ${multiple} multiple people; ${uncertain} joints below confidence threshold. `+(usable?'Inspect skeleton alignment before confirming. ': '')+(multiple?'Crop to one athlete and retry. ': '')+(missing?'Check the athlete stays inside the area; try Full or a tighter crop. ': '')+(uncertain?'Hidden joints, camera angle, small body size or blur can reduce confidence; this is not a sharpness measurement.':'')};
+ return {total,missing,multiple,usable,uncertain,message:`${usable}/${total} samples have usable angles; ${missing} no athlete detected; ${multiple} multiple people; ${uncertain} joints below confidence threshold. `+(usable?'Inspect skeleton alignment before confirming. ': '')+(multiple?'Crop to one athlete and retry. ': '')+(missing?(model==='full'?'Check the captured detector inputs below; verify the athlete is visible throughout the crop. ':'Check the captured detector inputs below; try Full if the athlete is clearly visible. '): '')+(uncertain?'Hidden joints, camera angle, small body size or blur can reduce confidence; this is not a sharpness measurement.':'')};
 }
 function mapPoses(poses,crop){return poses.map(points=>points.map(p=>finite(p.x,0,1)&&finite(p.y,0,1)?{...p,x:crop.x+p.x*crop.width,y:crop.y+p.y*crop.height}:{...p,x:0,y:0,visibility:0,presence:0}));}
 function frame(time,poses){

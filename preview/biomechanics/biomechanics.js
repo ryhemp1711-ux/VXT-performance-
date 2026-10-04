@@ -2,7 +2,7 @@
 (()=>{
  const $=id=>document.getElementById('bio-'+id),video=document.getElementById('video-player'),B=VXTBiomechanics;
  let analysis=null,generation=0,previewSerial=0,busy=false;
- const engines=new Map();let selectedCrop=null,boxStart=null,boxPointer=null;
+ const engines=new Map();let inputImages=[];let selectedCrop=null,boxStart=null,boxPointer=null;
  const boxCanvas=$('box-canvas'),boxCtx=boxCanvas.getContext('2d');
  const canvas=$('canvas'),ctx=canvas.getContext('2d');
  const cropSettings=()=>selectedCrop||B.cropArea(Number($('zoom').value),Number($('center-x').value)/100,Number($('center-y').value)/100);
@@ -12,7 +12,7 @@
  const lockedIds=['video-file','video-back','video-forward','video-mark-start','video-mark-end','video-rate','video-fps','video-new','video-start','video-end','video-athlete','bio-side','bio-side-view','bio-frames','bio-preview','bio-zoom','bio-center-x','bio-center-y','bio-area','bio-model','bio-select-box','bio-clear-box'];
  function lock(value){for(const id of lockedIds)document.getElementById(id).disabled=value;video.controls=!value;}
  function cancel(){generation++;previewSerial++;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;}
- function reset(){cancel();closeBox();analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();status('No analysis attached.');}
+ function reset(){cancel();closeBox();inputImages=[];$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();status('No analysis attached.');}
  function restore(value){selectedCrop=null;reset();describeCrop();analysis=value?structuredClone(value):null;if(analysis){const c=analysis.crop||{x:0,y:0,width:1,height:1};selectedCrop=c;describeCrop();$('model').value=analysis.engine===B.ENGINES.full?'full':'lite';$('zoom').value='1';$('center-x').value=String((c.x+c.width/2)*100);$('center-y').value=String((c.y+c.height/2)*100);$('side').value=analysis.side;$('side-view').checked=true;$('confirm').checked=analysis.confirmed;render();status('Saved measurements loaded. Reselect the original video to inspect overlays.');}}
  function getData(){if(busy)throw Error('Wait for biomechanics analysis or cancel it before saving.');if(!analysis)return undefined;if(!analysis.frames.some(f=>Object.values(B.measure(f,analysis.width,analysis.height,analysis.side)).some(v=>v!==null)))throw Error('No usable body measurements. Adjust the analysis area and retry, or remove analysis to save timing and notes.');if(!$('confirm').checked)throw Error('Review the skeleton samples and confirm the athlete and tracking, or remove the analysis.');return {...analysis,confirmed:true};}
  async function load(model){
@@ -43,6 +43,21 @@
    for(const p of f.points)if(B.visible(p)){ctx.beginPath();ctx.arc(p.x*canvas.width,p.y*canvas.height,Math.max(3,canvas.width/200),0,2*Math.PI);ctx.fill();}canvas.hidden=false;
   }catch(e){status(e.message);}
  }
+ function inspectInput(capture,index,count,time,model){
+  if(![0,Math.floor((count-1)/2),count-1].includes(index))return null;
+  $('input-panel').hidden=false;
+  const card=document.createElement('figure'),caption=document.createElement('figcaption');
+  card.append(caption);$('inputs').append(card);
+  const prefix=`Sample ${index+1}/${count} · ${model==='full'?'Full':'Lite'} · requested ${time.toFixed(3)} s · playhead ${video.currentTime.toFixed(3)} s · ${capture.width} × ${capture.height} pixels`;
+  try{
+   // Snapshot this very canvas immediately before detect(capture), with no seek or await in between.
+   const png=capture.toDataURL('image/png');if(!png.startsWith('data:image/png'))throw Error('Canvas snapshot unavailable.');
+   const image=document.createElement('img');image.src=png;image.alt=`Detector input for sample ${index+1}`;card.append(image);
+   const identical=inputImages.find(item=>item.png===png);inputImages.push({png,index});
+   caption.textContent=prefix+(identical?` · identical pixels to sample ${identical.index+1} (a still scene or repeated capture; inspect the images).`:'')+' · captured before detector call.';
+  }catch(e){caption.textContent=prefix+' · input preview unavailable: '+e.message;}
+  const result=document.createElement('p');card.append(result);result.textContent='Detector call pending.';return result;
+ }
  async function run(){
   if(busy)return;
   let token=null,stage='setup';
@@ -60,11 +75,11 @@
    const capture=document.createElement('canvas');capture.width=Math.max(1,Math.round(width*crop.width));capture.height=Math.max(1,Math.round(height*crop.height));const captureCtx=capture.getContext('2d');const frames=[],count=Math.min(51,Math.ceil((end-start)*5)+1);
    for(let i=0;i<count;i++){
     stage='video decoding / seeking';const time=start+(end-start)*i/(count-1);await seek(time,token);if(token!==generation)return;
-    stage='body detection';captureCtx.drawImage(video,width*crop.x,height*crop.y,width*crop.width,height*crop.height,0,0,capture.width,capture.height);const result=detector.detect(capture);frames.push(B.frame(time,B.mapPoses(result.landmarks,crop)));
+    stage='body detection';captureCtx.drawImage(video,width*crop.x,height*crop.y,width*crop.width,height*crop.height,0,0,capture.width,capture.height);const inputResult=inspectInput(capture,i,count,time,model);let result;try{result=detector.detect(capture);if(inputResult)inputResult.textContent=`Detector returned ${result.landmarks.length} pose(s) for this input.`;}catch(e){if(inputResult)inputResult.textContent='Detector call failed: '+e.message;throw e;}frames.push(B.frame(time,B.mapPoses(result.landmarks,crop)));
     status(`Analyzing sample ${i+1} of ${count}…`);await new Promise(resolve=>setTimeout(resolve,0));if(token!==generation)return;
    }
    analysis={version:1,engine:B.ENGINES[model],view:'side',side,width,height,start,end,crop,confirmed:false,frames};busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;render();changed();const seconds=(performance.now()-started)/1000;await preview();if(token!==generation)return;
-   const report=B.diagnostics(frames,width,height,side);$('confirm').disabled=report.usable===0;
+   const report=B.diagnostics(frames,width,height,side,model);$('confirm').disabled=report.usable===0;
    status(`${model==='full'?'Full':'Lite'} · ${seconds.toFixed(1)} seconds · ${report.message}`);
   }catch(e){if(token!==null&&token!==generation)return;cancel();status('Analysis unavailable during '+stage+': '+e.message+' Existing timing and coach notes are still available.');}
  }

@@ -206,3 +206,11 @@ Both models retain the same confidence thresholds. Each saved analysis records i
 This iteration retains independent-image inference at approximately five samples per second; temporal tracking and denser sampling remain future experiments. Test records remain separate from the main coaching workspace and cloud sync is disabled on this page.
 
 Validation: 101 automated tests pass, including seven new geometry, diagnostic and simulated-editor checks. The editor checks stub video/canvas/model responses: they verify selection, cancellation, model switching, restore, failure retry and confirmation gating, not real inference. A Chromium download failed in the development environment. Real MP4 decoding, model loading, touch layout and physical iPhone/Safari behavior still require verification. Compare a 1–3-second original side-on clip with identical markers/crop in Lite and Full; inspect actual joint alignment as well as usable-frame counts and processing time before deciding whether detection improved.
+
+## Biomechanics test page v0.17.3 — inspect actual detector inputs
+
+After **Analyze marked segment**, **Actual detector inputs** shows the first, middle and last sampled input as lossless PNG snapshots of the same canvas passed to `detect()`. There is no intervening seek or asynchronous wait between snapshot and inference. Each card shows the requested time, browser-reported playhead, canvas dimensions, selected model and returned pose count (or detector error). Identical PNGs are flagged as possible repeated capture or a still scene, not proof of a decoding bug. The existing **Show analysis area** remains a current-playhead preview and is distinct from these captured inputs.
+
+Snapshots stay in memory and are cleared on a new analysis/editor reset; they are not included in saved reviews, backups or cloud transfers. At most three snapshots are retained. Preview failures are reported separately and do not prevent inference. Full-model failures no longer recommend selecting Full again.
+
+Validation: 103 automated tests pass. Simulated-editor checks verify snapshot/inference canvas identity and call order, sample selection, zero-pose evidence and reset cleanup. Actual iPhone video pixels and detection quality remain to be checked using this diagnostic panel; these tests do not establish successful real-video inference.
