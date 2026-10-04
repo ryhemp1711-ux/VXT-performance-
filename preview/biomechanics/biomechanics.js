@@ -84,7 +84,7 @@
    if(!$('side-view').checked)throw Error('Confirm a side-on clip with the full athlete visible.');
    if(document.getElementById('video-start').value===''||!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>video.duration||end-start>10)throw Error('Mark a continuous segment of up to 10 seconds.');
    reset();changed();busy=true;lock(true);$('run').disabled=true;$('cancel').disabled=false;video.pause();token=generation;
-   const width=video.videoWidth,height=video.videoHeight,model=$('model').value,detector=await load(model),times=[(start+end)/2,start,end],selected=[];stage='tile scanning';
+   const width=video.videoWidth,height=video.videoHeight,model=$('model').value,detector=await load(model),times=Array.from({length:5},(_,i)=>start+(end-start)*i/4),selected=[];stage='tile scanning';
    for(let n=0;n<times.length;n++){
     const time=times[n];stage='video decoding / seeking';await seek(time,token);if(token!==generation)return;
     const candidates=[];for(const tile of B.autoScanCrops()){
