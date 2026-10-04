@@ -23,3 +23,6 @@
 #bio-canvas{display:block;width:100%;height:auto;margin:1rem 0;background:#111718}
 #bio-canvas[hidden]{display:none}
 #bio-results{line-height:1.7;overflow-wrap:anywhere}
+
+#bio-box-canvas{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;background:#111718}
+#bio-box-editor[hidden]{display:none}
