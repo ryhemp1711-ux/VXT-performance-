@@ -218,3 +218,7 @@ Validation: 103 automated tests pass. Simulated-editor checks verify snapshot/in
 ## Biomechanics test page v0.17.4 — enlarged detector input
 
 Selected analysis areas are now rendered to an inference canvas with the shorter side at least 640 pixels, capped at a 1280-pixel long side. This increases the athlete's input resolution when the source runner is small while preserving the crop aspect ratio and mapping landmarks back into original-video coordinates. Captured-input diagnostics show the enlarged canvas dimensions. Upscaling cannot restore detail that was never recorded; a closer source recording remains preferable.
+
+## Biomechanics test page v0.17.5 — auto-find athlete
+
+The isolated biomechanics page adds **Auto-find athlete**. It scans six overlapping areas of the marked segment at the middle, start and end, enlarges each tile for inference, collects body candidates and follows the most consistent candidate across those samples. It creates a padded crop that can be reviewed with **Show analysis area** before normal analysis. Manual drawing and zoom/center controls remain available. Auto-find may select the wrong person when several athletes have similar size or overlap; review the crop before analyzing.
