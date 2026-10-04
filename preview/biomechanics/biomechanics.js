@@ -2,7 +2,7 @@
 (()=>{
  const $=id=>document.getElementById('bio-'+id),video=document.getElementById('video-player'),B=VXTBiomechanics;
  let analysis=null,generation=0,previewSerial=0,busy=false;
- const engines=new Map();let inputImages=[];let selectedCrop=null,boxStart=null,boxPointer=null;
+ const engines=new Map();let inputImages=[];let selectedCrop=null,autoPath=[],boxStart=null,boxPointer=null;
  const boxCanvas=$('box-canvas'),boxCtx=boxCanvas.getContext('2d');
  const canvas=$('canvas'),ctx=canvas.getContext('2d');
  const cropSettings=()=>selectedCrop||B.cropArea([1,2,3,4].includes(Number($('zoom').value))?Number($('zoom').value):1,Number.isFinite(Number($('center-x').value))?Number($('center-x').value)/100:.5,Number.isFinite(Number($('center-y').value))?Number($('center-y').value)/100:.5);
@@ -13,7 +13,7 @@
  const lockedIds=['video-file','video-back','video-forward','video-mark-start','video-mark-end','video-rate','video-fps','video-new','video-start','video-end','video-athlete','bio-side','bio-side-view','bio-frames','bio-preview','bio-zoom','bio-center-x','bio-center-y','bio-area','bio-auto','bio-model','bio-select-box','bio-clear-box'];
  function lock(value){for(const id of lockedIds)document.getElementById(id).disabled=value;video.controls=!value;}
  function cancel(){generation++;previewSerial++;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;}
- function reset(){cancel();closeBox();inputImages=[];$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();status('No analysis attached.');}
+ function reset(){cancel();closeBox();inputImages=[];autoPath=[];$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();status('No analysis attached.');}
  function restore(value){selectedCrop=null;reset();describeCrop();analysis=value?structuredClone(value):null;if(analysis){const c=analysis.crop||{x:0,y:0,width:1,height:1};selectedCrop=c;describeCrop();$('model').value=analysis.engine===B.ENGINES.full?'full':'lite';$('zoom').value='1';$('center-x').value=String((c.x+c.width/2)*100);$('center-y').value=String((c.y+c.height/2)*100);$('side').value=analysis.side;$('side-view').checked=true;$('confirm').checked=analysis.confirmed;render();status('Saved measurements loaded. Reselect the original video to inspect overlays.');}}
  function getData(){if(busy)throw Error('Wait for biomechanics analysis or cancel it before saving.');if(!analysis)return undefined;if(!analysis.frames.some(f=>Object.values(B.measure(f,analysis.width,analysis.height,analysis.side)).some(v=>v!==null)))throw Error('No usable body measurements. Adjust the analysis area and retry, or remove analysis to save timing and notes.');if(!$('confirm').checked)throw Error('Review the skeleton samples and confirm the athlete and tracking, or remove the analysis.');return {...analysis,confirmed:true};}
  async function load(model){
@@ -114,6 +114,17 @@
   });
   const best=paths.filter(path=>path.items.length>=2).sort((a,b)=>rank(b)-rank(a))[0];return best?best.items:[];
  }
+ function trackedCrop(path,time,start,end){
+  if(!path.length)return null;
+  const fraction=end>start?Math.max(0,Math.min(1,(time-start)/(end-start))):0,point=path[Math.min(path.length-1,Math.max(0,Math.round(fraction*(path.length-1))))],width=.36,height=.46,x=Math.max(0,Math.min(1-width,point.cx-width/2)),y=Math.max(0,Math.min(1-height,point.cy-height/2));
+  return {x,y,width,height,cx:x+width/2,cy:y+height/2};
+ }
+ function trackedPose(landmarks,crop,expected){
+  return landmarks.map(points=>({points,candidate:poseCandidate(points,crop)})).filter(item=>item.candidate).sort((a,b)=>{
+   const score=item=>Math.exp(-Math.hypot(item.candidate.cx-expected.cx,item.candidate.cy-expected.cy)/.18)*(.5+Math.sqrt(item.candidate.area)*4+item.candidate.quality);
+   return score(b)-score(a);
+  })[0]?.points||null;
+ }
  async function autoFind(){
   if(busy)return;
   let token=null,stage='setup';
@@ -134,8 +145,8 @@
     }
     const picked=chooseCandidate(candidates,n?selected[selected.length-1]:null);if(picked)selected.push(picked);
    }
-   if(selected.length<2){const moving=motionTrack(motionGroups);if(moving.length>=2){selectedCrop=B.unionCrop(moving.map(c=>({x:c.x,y:c.y,width:c.width,height:c.height})),.25,.5);$('box-status').textContent=`Auto crop selected from moving athlete area: left ${(selectedCrop.x*100).toFixed(0)}%, top ${(selectedCrop.y*100).toFixed(0)}%, width ${(selectedCrop.width*100).toFixed(0)}%, height ${(selectedCrop.height*100).toFixed(0)}%. Review it with Show analysis area, then analyze.`;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status(`Pose model did not label the athlete consistently, so Auto-find selected a moving athlete area from ${moving.length} samples. Review the area, then analyze.`);return;}
-    throw Error('No consistent athlete or moving subject was found. Draw an athlete box around the runner and retry.');}
+   if(selected.length<2){const moving=motionTrack(motionGroups);if(moving.length>=2){autoPath=moving;selectedCrop=B.unionCrop(moving.map(c=>({x:c.x,y:c.y,width:c.width,height:c.height})),.25,.5);$('box-status').textContent=`Auto crop selected from moving athlete area: left ${(selectedCrop.x*100).toFixed(0)}%, top ${(selectedCrop.y*100).toFixed(0)}%, width ${(selectedCrop.width*100).toFixed(0)}%, height ${(selectedCrop.height*100).toFixed(0)}%. Review it with Show analysis area, then analyze.`;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status(`Pose model did not label the athlete consistently, so Auto-find selected a moving athlete area from ${moving.length} samples. Review the area, then analyze.`);return;}
+    selectedCrop={x:0,y:.4,width:.8,height:.55};$('box-status').textContent='Suggested lower-track area selected: left 0%, top 40%, width 80%, height 55%. Review it with Show analysis area; draw an athlete box if this does not contain the runner.';busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status('Auto-find could not confirm a pose, so it selected a lower-track area for review. Check the crop, then analyze or draw an athlete box.');return;}
    selectedCrop=B.unionCrop(selected.map(c=>({x:c.x,y:c.y,width:c.width,height:c.height})),.8,.9);$('box-status').textContent=`Auto crop selected: left ${(selectedCrop.x*100).toFixed(0)}%, top ${(selectedCrop.y*100).toFixed(0)}%, width ${(selectedCrop.width*100).toFixed(0)}%, height ${(selectedCrop.height*100).toFixed(0)}%. Review it with Show analysis area, then analyze.`;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status(`Auto crop found a consistent athlete in ${selected.length}/${times.length} scan samples. Review the area, then analyze the marked segment.`);
   }catch(e){if(token!==null&&token!==generation)return;cancel();status('Auto-find unavailable during '+stage+': '+e.message+' You can still draw an athlete box manually.');}
  }
@@ -148,15 +159,15 @@
    if(!document.getElementById('video-athlete').value)throw Error('Choose an athlete first.');
    if(!$('side-view').checked)throw Error('Confirm a side-on clip with the full athlete visible.');
    if(document.getElementById('video-start').value===''||!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>video.duration||end-start>10)throw Error('Mark a continuous segment of up to 10 seconds.');
-   reset();changed();busy=true;lock(true);$('run').disabled=true;$('cancel').disabled=false;video.pause();token=generation;
+   const trackingPath=autoPath.slice();reset();changed();busy=true;lock(true);$('run').disabled=true;$('cancel').disabled=false;video.pause();token=generation;
    const side=$('side').value,width=video.videoWidth,height=video.videoHeight,crop=cropSettings(),model=$('model').value,started=performance.now();
    stage='model loading';
    status('Loading body-position model… First use requires internet; video remains on this device.');
    const detector=await load(model);if(token!==generation)return;
-   const sourceCropWidth=Math.max(1,Math.round(width*crop.width)),sourceCropHeight=Math.max(1,Math.round(height*crop.height)),inputSize=inferenceSize(sourceCropWidth,sourceCropHeight);const capture=document.createElement('canvas');capture.width=inputSize.width;capture.height=inputSize.height;const captureCtx=capture.getContext('2d');const frames=[],count=Math.min(51,Math.ceil((end-start)*5)+1);
+   const sourceCropWidth=Math.max(1,Math.round(width*crop.width)),sourceCropHeight=Math.max(1,Math.round(height*crop.height)),inputSize=inferenceSize(sourceCropWidth,sourceCropHeight);const capture=document.createElement('canvas');capture.width=inputSize.width;capture.height=inputSize.height;const captureCtx=capture.getContext('2d'),dynamicTracking=trackingPath.length>=2;const frames=[],count=Math.min(51,Math.ceil((end-start)*5)+1);
    for(let i=0;i<count;i++){
     stage='video decoding / seeking';const time=start+(end-start)*i/(count-1);await seek(time,token);if(token!==generation)return;
-    stage='body detection';captureCtx.drawImage(video,width*crop.x,height*crop.y,width*crop.width,height*crop.height,0,0,capture.width,capture.height);const inputResult=inspectInput(capture,i,count,time,model);let result;try{result=detector.detect(capture);if(inputResult)inputResult.textContent=`Detector returned ${result.landmarks.length} pose(s) for this input.`;}catch(e){if(inputResult)inputResult.textContent='Detector call failed: '+e.message;throw e;}frames.push(B.frame(time,B.mapPoses(result.landmarks,crop)));
+    stage='body detection';const inferenceCrop=dynamicTracking?trackedCrop(trackingPath,time,start,end):crop,expected={cx:inferenceCrop.cx,cy:inferenceCrop.cy};captureCtx.drawImage(video,width*inferenceCrop.x,height*inferenceCrop.y,width*inferenceCrop.width,height*inferenceCrop.height,0,0,capture.width,capture.height);const inputResult=inspectInput(capture,i,count,time,model);let result;try{result=detector.detect(capture);if(inputResult)inputResult.textContent=`Detector returned ${result.landmarks.length} pose(s) for this input.`;}catch(e){if(inputResult)inputResult.textContent='Detector call failed: '+e.message;throw e;}const tracked=dynamicTracking?trackedPose(result.landmarks,inferenceCrop,expected):null;frames.push(dynamicTracking?B.frame(time,tracked?[B.mapPoses([tracked],inferenceCrop)[0]]:[]):B.frame(time,B.mapPoses(result.landmarks,crop)));
     status(`Analyzing sample ${i+1} of ${count}…`);await new Promise(resolve=>setTimeout(resolve,0));if(token!==generation)return;
    }
    analysis={version:1,engine:B.ENGINES[model],view:'side',side,width,height,start,end,crop,confirmed:false,frames};busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;render();changed();const seconds=(performance.now()-started)/1000;await preview();if(token!==generation)return;
