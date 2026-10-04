@@ -23,7 +23,9 @@ function boxCrop(a,b){
  if(!validCrop(c))throw Error('Draw a larger box (at least 5% of the frame in each direction).');return c;
 }
 function autoScanCrops(){
- const xs=[0,.225,.45],ys=[0,.3],width=.55,height=.7;
+ // The athlete is often only a few dozen pixels tall in a wide stadium shot.
+ // Shorter tiles give the pose model more pixels without losing frame coverage.
+ const xs=[0,.25,.5],ys=[0,.45],width=.5,height=.55;
  return ys.flatMap(y=>xs.map(x=>({x,y,width,height})));
 }
 function unionCrop(boxes,padX=.6,padY=.6){
