@@ -33,3 +33,10 @@ test('Full failures direct users to captured inputs without suggesting Full agai
  const report=B.diagnostics([B.frame(1,[])],1920,1080,'left','full');
  assert.match(report.message,/captured detector inputs/);assert.doesNotMatch(report.message,/try Full/);
 });
+test('auto-find scan tiles cover the frame with overlap and union adds bounded padding',()=>{
+ const tiles=B.autoScanCrops();assert.equal(tiles.length,6);
+ assert.ok(tiles.every(c=>B.validCrop(c)));
+ assert.ok(tiles.some(a=>a.x===0&&tiles.some(b=>b.x>a.x&&b.x< a.width)));
+ const crop=B.unionCrop([{x:.35,y:.45,width:.08,height:.15},{x:.45,y:.44,width:.08,height:.16}]);
+ assert.ok(crop.x<.35&&crop.y<.44);assert.ok(crop.x+crop.width>.53&&crop.y+crop.height>.60);assert.ok(B.validCrop(crop));
+});
