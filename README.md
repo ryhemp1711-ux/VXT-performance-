@@ -214,3 +214,7 @@ After **Analyze marked segment**, **Actual detector inputs** shows the first, mi
 Snapshots stay in memory and are cleared on a new analysis/editor reset; they are not included in saved reviews, backups or cloud transfers. At most three snapshots are retained. Preview failures are reported separately and do not prevent inference. Full-model failures no longer recommend selecting Full again.
 
 Validation: 103 automated tests pass. Simulated-editor checks verify snapshot/inference canvas identity and call order, sample selection, zero-pose evidence and reset cleanup. Actual iPhone video pixels and detection quality remain to be checked using this diagnostic panel; these tests do not establish successful real-video inference.
+
+## Biomechanics test page v0.17.4 — enlarged detector input
+
+Selected analysis areas are now rendered to an inference canvas with the shorter side at least 640 pixels, capped at a 1280-pixel long side. This increases the athlete's input resolution when the source runner is small while preserving the crop aspect ratio and mapping landmarks back into original-video coordinates. Captured-input diagnostics show the enlarged canvas dimensions. Upscaling cannot restore detail that was never recorded; a closer source recording remains preferable.
