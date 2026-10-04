@@ -226,3 +226,7 @@ The isolated biomechanics page adds **Auto-find athlete**. It scans six overlapp
 ## Biomechanics test page v0.17.6 — tighter auto-find scans
 
 Auto-find now uses shorter, overlapping tiles so small athletes near the track are enlarged more before pose inference. It checks five evenly spaced points across the marked segment instead of only three, so a single blurred start or end frame does not make the whole search fail. The selected crop still requires review before analysis.
+
+## Biomechanics test page v0.17.7 — tuned scan geometry
+
+The auto-find tiles are tuned for the uploaded wide-track footage: six smaller lower-frame windows provide more athlete pixels while retaining horizontal overlap and full track-height coverage. The page cache key is refreshed so phones load the updated detector scan.
