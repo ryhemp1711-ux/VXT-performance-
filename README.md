@@ -222,3 +222,7 @@ Selected analysis areas are now rendered to an inference canvas with the shorter
 ## Biomechanics test page v0.17.5 — auto-find athlete
 
 The isolated biomechanics page adds **Auto-find athlete**. It scans six overlapping areas of the marked segment at the middle, start and end, enlarges each tile for inference, collects body candidates and follows the most consistent candidate across those samples. It creates a padded crop that can be reviewed with **Show analysis area** before normal analysis. Manual drawing and zoom/center controls remain available. Auto-find may select the wrong person when several athletes have similar size or overlap; review the crop before analyzing.
+
+## Biomechanics test page v0.17.6 — tighter auto-find scans
+
+Auto-find now uses shorter, overlapping tiles so small athletes near the track are enlarged more before pose inference. It checks five evenly spaced points across the marked segment instead of only three, so a single blurred start or end frame does not make the whole search fail. The selected crop still requires review before analysis.
