@@ -30,9 +30,9 @@ function buildContext(row, athleteId, asOf) {
 /** Fetch-compatible endpoint factory. Adapters must run on a trusted server.
  * authenticate(token): verify identity with the auth service, never just decode JWT.
  * readWorkspace(token,userId): use that user's token/RLS, never a service-role bypass.
- * No model call or workout write exists in this first milestone.
+ * Optional review adapter produces a read-only draft; no workout write is allowed.
  */
-function createCoachHandler({authenticate, readWorkspace, clock = () => new Date()}) {
+function createCoachHandler({authenticate, readWorkspace, review = null, allowReview = () => false, clock = () => new Date()}) {
  return async request => {
   const reply = (status, body) => new Response(JSON.stringify(body), {status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   if(request.method !== 'POST') return reply(405,{error:'Use POST.'});
@@ -50,11 +50,21 @@ function createCoachHandler({authenticate, readWorkspace, clock = () => new Date
    }
    let input;
    try { input = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return reply(400,{error:'Invalid JSON.'}); }
-   if(!input || typeof input.athleteId !== 'string' || !input.athleteId || input.athleteId.length > 200 || Object.keys(input).some(k=> k !== 'athleteId'))
-    return reply(400,{error:'Supply only athleteId.'});
+   if(!input || typeof input.athleteId !== 'string' || !input.athleteId || input.athleteId.length > 200 || Object.keys(input).some(k=> !['athleteId','action','expectedRevision'].includes(k)))
+    return reply(400,{error:'Invalid coach request.'});
+   if(input.action !== undefined && !['context','review'].includes(input.action)) return reply(400,{error:'Invalid action.'});
    const row = await readWorkspace(token,user.id);
    if(!row || row.user_id !== user.id) return reply(404,{error:'Upload your workspace to cloud first.'});
    const context = buildContext(row,input.athleteId,clock().toISOString().slice(0,10));
+   if(input.action === 'review') {
+    if(!Number.isInteger(input.expectedRevision) || input.expectedRevision !== row.revision) return reply(409,{error:'Cloud data changed. Refresh the evidence first.'});
+    if(!review) return reply(503,{error:'AI review is not configured yet.'});
+    if(!context.results.length) return reply(422,{error:'Add dated results and upload to cloud before requesting a review.'});
+    if(!await allowReview(user.id)) return reply(429,{error:'AI review is unavailable for this account or the pilot daily limit has been reached.'});
+    if(JSON.stringify(context).length > 30000) return reply(422,{error:'Evidence is too large for this pilot review.'});
+    const draft = await review(context);
+    return reply(200,{status:'draft_review',requiresCoachApproval:true,context,review:draft,recommendation:null});
+   }
    return reply(200,{status:'needs_information', requiresCoachApproval:true, context, recommendation:null});
   } catch(error) {
    return reply(error.status === 404 ? 404 : 503,{error:error.status === 404 ? 'Athlete not found.' : 'Coach context unavailable. Please try again.'});

@@ -26,7 +26,7 @@
    });
   }
   client=globalThis.supabase.createClient(url,publishableKey);
-  client.auth.onAuthStateChange((_event,session)=>{user=session?.user||null;draw();});
+  client.auth.onAuthStateChange((_event,session)=>{const previous=user?.id;user=session?.user||null;draw();if(previous!==undefined&&previous!==user?.id)document.dispatchEvent?.(new Event('vxt-auth-changed'));});
   const result=await client.auth.getSession();if(result.error)throw result.error;
   user=result.data.session?.user||null;draw();return client;
  }
@@ -48,7 +48,7 @@
   status(signup&&!r.data.session?'Check your email to confirm your account, then return here and sign in.':'Signed in. Choose upload on the device with your records, or download on your other device.');
  });});
  el('cloud-signout').addEventListener('click',()=>run(async()=>{
-  const c=await connect();const r=await c.auth.signOut({scope:'local'});if(r.error)throw r.error;user=null;
+  const c=await connect();const r=await c.auth.signOut({scope:'local'});if(r.error)throw r.error;user=null;document.dispatchEvent?.(new Event('vxt-auth-changed'));
   status('Signed out. Downloaded records remain in this browser.');
  }));
  el('cloud-upload').addEventListener('click',()=>run(async()=>{
@@ -70,6 +70,7 @@
   status('Downloaded '+count(row.payload)+'. Your roster, results and predictions are ready on this device.');
  }));
  el('cloud-recovery').addEventListener('click',()=>run(async()=>{VXTLocal.exportSafetyCopy();status('Recovery backup download started.');}));
+ globalThis.VXTCloud={async coachSession(){const owner=await account();const result=await client.auth.getSession();if(result.error)throw result.error;const session=result.data.session;if(!session?.access_token||session.user.id!==owner.id)throw Error('Sign in again in Cloud sync.');return {token:session.access_token,userId:owner.id};}};
  // Load auth only when the user opens Cloud sync; local app works without the CDN.
  document.querySelector('[data-tab="cloud"]').addEventListener('click',()=>run(async()=>{await connect();}));
  draw();
