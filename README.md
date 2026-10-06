@@ -238,3 +238,11 @@ When pose inference returns no consistent candidates, Auto-find now compares the
 ## Biomechanics test page v0.17.9 — guided fallback analysis
 
 If both pose and motion scans are inconclusive, Auto-find now selects a clearly labeled lower-track review area instead of ending with an unusable error. The normal Analyze action still determines whether pose measurements are actually usable; users can replace the suggestion with Draw athlete box.
+
+## Biomechanics test page v0.17.10 — corrected moving analysis crops
+
+Auto-find now retains timestamped paths from both pose and motion scans. Analysis interpolates crop centers using the actual sample times, including gaps, instead of jumping between list positions. Each detector canvas uses its current crop's aspect ratio; the previous motion path could stretch a tight crop into the wider path envelope's dimensions. Retrying analysis retains the path; resetting the editor, changing markers, choosing a manual area or changing the model clears it. Small detected runners can now form a valid crop even when their candidate box is below the manual box's 5% minimum.
+
+After Auto-find, seek through the marked segment and use **Show analysis area** to check the moving crop at that playhead. Each analyzed sample stores its crop and **Show sample overlay** outlines that area in amber. Old analyses without per-sample crops remain readable. Multiple detected people remain ambiguous rather than silently selecting one. Manual boxes and the unconfirmed lower-track fallback remain fixed. This is a moving inference area, not a stabilized or exported pan-and-follow video; the original video is unchanged.
+
+Validation: 109 automated tests pass. Added checks cover timestamp interpolation, gaps and boundaries, small candidates, aspect-ratio preservation, repeat analysis, reset cleanup, ambiguous detections and sample-crop validation. These use simulated media/model responses. Real MP4 decoding, model inference, tracking quality and physical iPhone/Safari behavior remain unverified for this change.

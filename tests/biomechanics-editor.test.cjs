@@ -12,7 +12,7 @@ function editor(){
   append(x){this.options.push(x);if(this.options.length===1)this.value='0';}
   replaceChildren(){this.options=[];}
   toDataURL(type){captures.push({kind:'snapshot',canvas:this,type});return 'data:image/png;base64,fixture';}
-  getContext(){return new Proxy({},{get:()=>()=>{}});}
+  getContext(){const canvas=this;return new Proxy({},{get:(target,key)=>key==='getImageData'?()=>({width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(canvas.width*canvas.height*4)}):key==='drawImage'?(...args)=>captures.push({kind:'draw',canvas,args,width:canvas.width,height:canvas.height}):()=>{}});}
   getBoundingClientRect(){return {left:0,top:0,width:100,height:100};}
   setPointerCapture(id){this.capture=id;} hasPointerCapture(id){return this.capture===id;} releasePointerCapture(){this.capture=null;}
  }
@@ -64,4 +64,24 @@ test('diagnostics snapshot the same canvas immediately before inference and reta
  for(const card of cards)assert.match(card.options[2].textContent,/returned 0 pose/);
  assert.match(cards[1].options[0].textContent,/identical pixels/);
  api.reset();assert.equal(el('bio-input-panel').hidden,true);assert.equal(el('bio-inputs').options.length,0);
+});
+
+test('pose auto-find retains a moving path and preserves the crop aspect ratio on repeated analysis',async()=>{
+ const {el,api,captures}=editor();el('video-end').value='2';
+ await el('bio-auto').fire('click');assert.match(el('bio-box-status').textContent,/moving crop/);
+ for(let attempt=0;attempt<2;attempt++){
+  captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
+  const data=api.getData();assert.equal(data.frames.length,6);
+  for(const frame of data.frames){assert.equal(frame.crop.width,.36);assert.equal(frame.crop.height,.46);}
+  const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(draws.length,6);
+  for(const d of draws)assert.ok(Math.abs(d.width/d.height-d.args[3]/d.args[4])<.002,'detector input must keep source crop proportions');
+ }
+ api.reset();await el('bio-run').fire('click');el('bio-confirm').checked=true;
+ assert.equal(api.getData().frames[0].crop.width,1,'new video/editor reset clears previous path');
+});
+
+test('moving crops do not silently resolve multiple people into a confirmed athlete',async()=>{
+ const {el,api,state}=editor();await el('bio-auto').fire('click');state.poses=[state.poses[0],state.poses[0]];
+ await el('bio-run').fire('click');assert.equal(el('bio-confirm').disabled,true);
+ assert.match(el('bio-status').textContent,/multiple people/);assert.throws(()=>api.getData(),/No usable/);
 });
