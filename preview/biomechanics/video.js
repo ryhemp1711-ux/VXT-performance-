@@ -33,7 +33,7 @@
  player.addEventListener('loadedmetadata',()=>guard(()=>{
   if(!source||!Number.isFinite(player.duration)||player.duration<=0||player.duration>86400)throw Error('This video duration is not supported. Choose a clip under 24 hours.');
   if(expected&&Math.abs(expected.duration-player.duration)>0.1){unload();source=expected;throw Error('Video duration does not match the saved review.');}
-  source={...source,duration:player.duration};ready=true;controls();player.playbackRate=Number(el('rate').value);el('source').textContent=`${source.name} · ${source.duration.toFixed(2)} s · Local playback only`;
+  source={...source,duration:player.duration};ready=true;controls();player.playbackRate=Number(el('rate').value);el('source').textContent=`${source.name} · ${source.duration.toFixed(2)} s · ${VXTBiomechanics.videoFormat(player.videoWidth,player.videoHeight).label} · Local playback only`;
   if(expected){player.currentTime=Number(el('start').value)||0;status('Original video loaded.');}else{dirty=true;status('Video ready. Mark one uninterrupted run and enter your observations.');}calculate();
  }));
  player.addEventListener('error',()=>{if(!player.getAttribute('src'))return;ready=false;controls();status('This browser cannot play the selected video. Try an MP4 with H.264 video. No review was saved.');});

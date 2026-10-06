@@ -52,7 +52,7 @@ test('Full failures direct users to captured inputs without suggesting Full agai
  assert.match(report.message,/captured detector inputs/);assert.doesNotMatch(report.message,/try Full/);
 });
 test('auto-find scan tiles cover the frame with overlap and union adds bounded padding',()=>{
- const tiles=B.autoScanCrops();assert.equal(tiles.length,6);
+ const tiles=B.autoScanCrops();assert.equal(tiles.length,9);
  assert.ok(tiles.every(c=>B.validCrop(c)));
  assert.ok(Math.max(...tiles.map(c=>c.x+c.width))===1);
  assert.ok(Math.max(...tiles.map(c=>c.y+c.height))===1);
@@ -67,4 +67,19 @@ test('small detected runners produce valid crops, including at the edge of the s
   assert.ok(crop.x<=box.x&&crop.x+crop.width>=box.x+box.width);
  }
  assert.throws(()=>B.unionCrop([{x:.99,y:0,width:.1,height:.1}]));
+});
+
+test('phone formats use their actual dimensions and scan every part of the frame',()=>{
+ for(const [w,h,ratio] of [[1080,1920,'9:16'],[1920,1080,'16:9'],[1440,1920,'3:4'],[1920,1440,'4:3'],[1080,1080,'1:1'],[3840,2160,'16:9']]){
+  assert.ok(B.videoFormat(w,h).label.includes(ratio));
+  const tiles=B.autoScanCrops(w,h);assert.equal(tiles.length,9);assert.ok(tiles.every(B.validCrop));
+  for(let y=0;y<=20;y++)for(let x=0;x<=20;x++)assert.ok(tiles.some(c=>x/20>=c.x&&x/20<=c.x+c.width&&y/20>=c.y&&y/20<=c.y+c.height));
+ }
+ assert.notDeepEqual(B.autoScanCrops(1080,1920),B.autoScanCrops(1920,1080));
+ assert.throws(()=>B.autoScanCrops(0,1920));
+});
+
+test('close phone footage gets a larger following crop that contains the detected body',()=>{
+ const path=[{time:0,cx:.5,cy:.5,width:.4,height:.7},{time:1,cx:.55,cy:.5,width:.4,height:.7}];
+ const crop=B.trackedCrop(path,.5);assert.ok(crop.width>=.6);assert.equal(crop.height,1);assert.ok(B.validCrop(crop));
 });

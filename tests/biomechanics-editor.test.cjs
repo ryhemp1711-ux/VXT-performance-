@@ -72,7 +72,7 @@ test('pose auto-find retains a moving path and preserves the crop aspect ratio o
  for(let attempt=0;attempt<2;attempt++){
   captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
   const data=api.getData();assert.equal(data.frames.length,6);
-  for(const frame of data.frames){assert.equal(frame.crop.width,.36);assert.equal(frame.crop.height,.46);}
+  for(const frame of data.frames){assert.equal(frame.crop.width,.36);assert.ok(frame.crop.height>=.46);}
   const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(draws.length,6);
   for(const d of draws)assert.ok(Math.abs(d.width/d.height-d.args[3]/d.args[4])<.002,'detector input must keep source crop proportions');
  }
@@ -84,4 +84,20 @@ test('moving crops do not silently resolve multiple people into a confirmed athl
  const {el,api,state}=editor();await el('bio-auto').fire('click');state.poses=[state.poses[0],state.poses[0]];
  await el('bio-run').fire('click');assert.equal(el('bio-confirm').disabled,true);
  assert.match(el('bio-status').textContent,/multiple people/);assert.throws(()=>api.getData(),/No usable/);
+});
+
+test('portrait auto-find scans upper and lower frame and sends unstretched portrait crops',async()=>{
+ const {el,captures}=editor(),video=el('video-player');video.videoWidth=1080;video.videoHeight=1920;
+ await el('bio-auto').fire('click');
+ const scans=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(scans.length,45);
+ assert.ok(scans.some(d=>d.args[2]===0));
+ assert.ok(scans.some(d=>Math.abs(d.args[2]+d.args[4]-1920)<1e-6));
+ for(const d of scans)assert.ok(Math.abs(d.width/d.height-d.args[3]/d.args[4])<.002);
+ await el('bio-area').fire('click');assert.match(el('bio-status').textContent,/Moving analysis area/);
+});
+
+test('failed portrait search keeps the whole frame instead of suggesting a lower-track region',async()=>{
+ const {el,state}=editor();Object.assign(el('video-player'),{videoWidth:1080,videoHeight:1920});state.poses=[];
+ await el('bio-auto').fire('click');assert.match(el('bio-status').textContent,/could not confirm/);
+ await el('bio-area').fire('click');assert.equal(el('bio-canvas').width,1080);assert.equal(el('bio-canvas').height,1920);
 });

@@ -77,7 +77,7 @@
  }
  function motionBoxes(image,previous){
   if(!previous||image.width!==previous.width||image.height!==previous.height)return [];
-  const width=image.width,height=image.height,current=image.data,last=previous.data,active=new Uint8Array(width*height),minY=Math.floor(height*.35),maxY=Math.ceil(height*.92),threshold=60;
+  const width=image.width,height=image.height,current=image.data,last=previous.data,active=new Uint8Array(width*height),minY=0,maxY=height,threshold=60;
   for(let y=minY;y<maxY;y++)for(let x=0;x<width;x++){
    const i=(y*width+x)*4,d=Math.abs(current[i]-last[i])+Math.abs(current[i+1]-last[i+1])+Math.abs(current[i+2]-last[i+2]);
    if(d>=threshold)active[y*width+x]=1;
@@ -93,7 +93,7 @@
    const queue=[start];seen[start]=1;let head=0,count=0,left=x,right=x,top=y,bottom=y;
    while(head<queue.length){const cell=queue[head++],cx=cell%width,cy=Math.floor(cell/width);count++;left=Math.min(left,cx);right=Math.max(right,cx);top=Math.min(top,cy);bottom=Math.max(bottom,cy);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const xx=cx+dx,yy=cy+dy;if(xx>=0&&xx<width&&yy>=minY&&yy<maxY){const next=yy*width+xx;if(grown[next]&&!seen[next]){seen[next]=1;queue.push(next);}}}}
    const boxWidth=(right-left+1)/width,boxHeight=(bottom-top+1)/height;
-   if(count>=8&&boxWidth>=.015&&boxHeight>=.025&&boxWidth<=.3&&boxHeight<=.3)boxes.push({x:left/width,y:top/height,width:boxWidth,height:boxHeight,cx:(left+right+1)/(2*width),cy:(top+bottom+1)/(2*height),area:count/(width*height)});
+   if(count>=8&&boxWidth>=.015&&boxHeight>=.025&&boxWidth<=.65&&boxHeight<=.9)boxes.push({x:left/width,y:top/height,width:boxWidth,height:boxHeight,cx:(left+right+1)/(2*width),cy:(top+bottom+1)/(2*height),area:count/(width*height)});
   }
   return boxes;
  }
@@ -126,19 +126,19 @@
    if(document.getElementById('video-start').value===''||!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>video.duration||end-start>10)throw Error('Mark a continuous segment of up to 10 seconds.');
    reset();changed();busy=true;lock(true);$('run').disabled=true;$('cancel').disabled=false;video.pause();token=generation;
    stage='model loading';
-   const width=video.videoWidth,height=video.videoHeight,model=$('model').value,detector=await load(model);if(token!==generation)return;const times=Array.from({length:5},(_,i)=>start+(end-start)*i/4),selected=[],motionCanvas=document.createElement('canvas');motionCanvas.width=228;motionCanvas.height=Math.max(64,Math.round(228*height/width));const motionCtx=motionCanvas.getContext('2d',{willReadFrequently:true});let previousMotion=null;const motionGroups=[];stage='tile scanning';
+   const width=video.videoWidth,height=video.videoHeight,model=$('model').value,detector=await load(model);if(token!==generation)return;const times=Array.from({length:5},(_,i)=>start+(end-start)*i/4),selected=[],motionCanvas=document.createElement('canvas');const motionScale=228/Math.max(width,height);motionCanvas.width=Math.max(1,Math.round(width*motionScale));motionCanvas.height=Math.max(1,Math.round(height*motionScale));const motionCtx=motionCanvas.getContext('2d',{willReadFrequently:true});let previousMotion=null;const motionGroups=[];stage='tile scanning';
    for(let n=0;n<times.length;n++){
     const time=times[n];stage='video decoding / seeking';await seek(time,token);if(token!==generation)return;
     motionCtx.drawImage(video,0,0,motionCanvas.width,motionCanvas.height);const currentMotion=motionCtx.getImageData(0,0,motionCanvas.width,motionCanvas.height);motionGroups.push(motionBoxes(currentMotion,previousMotion));previousMotion=currentMotion;
-    const candidates=[];for(const tile of B.autoScanCrops()){
+    const candidates=[];const tiles=B.autoScanCrops(width,height);for(let tileIndex=0;tileIndex<tiles.length;tileIndex++){const tile=tiles[tileIndex];
      const sourceW=Math.max(1,Math.round(width*tile.width)),sourceH=Math.max(1,Math.round(height*tile.height)),size=inferenceSize(sourceW,sourceH),capture=document.createElement('canvas');capture.width=size.width;capture.height=size.height;capture.getContext('2d').drawImage(video,width*tile.x,height*tile.y,width*tile.width,height*tile.height,0,0,size.width,size.height);stage='tile pose detection';const result=detector.detect(capture);for(const pose of result.landmarks||[]){const c=poseCandidate(pose,tile);if(c)candidates.push(c);}
-     status(`Auto-finding athlete · sample ${n+1}/${times.length} · ${candidates.length} candidates…`);if(token!==generation)return;
+     status(`Auto-finding · ${B.videoFormat(width,height).label} · sample ${n+1}/${times.length} · area ${tileIndex+1}/${tiles.length} · ${candidates.length} candidates…`);await new Promise(resolve=>setTimeout(resolve,0));if(token!==generation)return;
     }
     const picked=chooseCandidate(candidates,n?selected[selected.length-1]:null);if(picked)selected.push({...picked,time});
     await new Promise(resolve=>setTimeout(resolve,0));if(token!==generation)return;
    }
    if(selected.length<2){const moving=motionTrack(motionGroups);if(moving.length>=2){autoPath=moving.map(p=>({...p,time:times[p.time]}));selectedCrop=B.unionCrop(moving.map(c=>({x:c.x,y:c.y,width:c.width,height:c.height})),.25,.5);$('box-status').textContent=`Auto crop selected from moving athlete area: left ${(selectedCrop.x*100).toFixed(0)}%, top ${(selectedCrop.y*100).toFixed(0)}%, width ${(selectedCrop.width*100).toFixed(0)}%, height ${(selectedCrop.height*100).toFixed(0)}%. A moving crop will follow the suggested path. Seek and use Show analysis area to check it, then analyze.`;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status(`Pose model did not label the athlete consistently, so Auto-find selected a moving athlete area from ${moving.length} samples. Review the area, then analyze.`);return;}
-    selectedCrop={x:0,y:.4,width:.8,height:.55};$('box-status').textContent='Suggested lower-track area selected: left 0%, top 40%, width 80%, height 55%. Review it with Show analysis area; draw an athlete box if this does not contain the runner.';busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status('Auto-find could not confirm a pose, so it selected a lower-track area for review. Check the crop, then analyze or draw an athlete box.');return;}
+    selectedCrop={x:0,y:0,width:1,height:1};$('box-status').textContent='No athlete path confirmed. Full frame kept. Pause on the runner and use Draw athlete box.';busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status('Auto-find could not confirm an athlete path. Full frame kept; draw an athlete box around the runner and their path, then analyze.');return;}
    autoPath=selected;selectedCrop=B.unionCrop(selected.map(c=>({x:c.x,y:c.y,width:c.width,height:c.height})),.8,.9);$('box-status').textContent=`Auto crop selected: left ${(selectedCrop.x*100).toFixed(0)}%, top ${(selectedCrop.y*100).toFixed(0)}%, width ${(selectedCrop.width*100).toFixed(0)}%, height ${(selectedCrop.height*100).toFixed(0)}%. A moving crop will follow the suggested path. Seek and use Show analysis area to check it, then analyze.`;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;changed();status(`Auto crop found a consistent athlete in ${selected.length}/${times.length} scan samples. Review the area, then analyze the marked segment.`);
   }catch(e){if(token!==null&&token!==generation)return;cancel();status('Auto-find unavailable during '+stage+': '+e.message+' You can still draw an athlete box manually.');}
  }

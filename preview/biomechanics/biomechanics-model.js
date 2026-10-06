@@ -25,18 +25,24 @@ function trackedCrop(path,time){
  const a=right<=0?path[right===0?0:path.length-1]:path[right-1],b=right<=0?a:path[right];
  const fraction=a===b?0:Math.max(0,Math.min(1,(time-a.time)/(b.time-a.time)));
  const cx=a.cx+(b.cx-a.cx)*fraction,cy=a.cy+(b.cy-a.cy)*fraction;
- const width=.36,height=.46;
+ const width=Math.min(1,Math.max(.36,...path.map(p=>finite(p.width,.001,1)?p.width*1.5:0))),height=Math.min(1,Math.max(.46,...path.map(p=>finite(p.height,.001,1)?p.height*1.5:0)));
  return {x:Math.max(0,Math.min(1-width,cx-width/2)),y:Math.max(0,Math.min(1-height,cy-height/2)),width,height};
 }
 function boxCrop(a,b){
  const c={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x),height:Math.abs(a.y-b.y)};
  if(!validCrop(c))throw Error('Draw a larger box (at least 5% of the frame in each direction).');return c;
 }
-function autoScanCrops(){
- // The athlete is often only a few dozen pixels tall in a wide stadium shot.
- // Shorter tiles give the pose model more pixels without losing frame coverage.
- const xs=[0,.275,.55],ys=[.3,.55],width=.45,height=.45;
- return ys.flatMap(y=>xs.map(x=>({x,y,width,height})));
+function videoFormat(width,height){
+ if(!finite(width,1,16384)||!finite(height,1,16384)||!Number.isInteger(width)||!Number.isInteger(height))throw Error('Video dimensions are not ready.');
+ const gcd=(a,b)=>b?gcd(b,a%b):a,divisor=gcd(width,height);
+ return {ratio:width/height,orientation:width>height?'landscape':width<height?'portrait':'square',label:`${width} × ${height} · ${width/divisor}:${height/divisor} · ${width>height?'landscape':width<height?'portrait':'square'}`};
+}
+function autoScanCrops(sourceWidth=1920,sourceHeight=1080){
+ const {ratio}=videoFormat(sourceWidth,sourceHeight);
+ // Overlapping tiles cover every edge, including the upper frame in upright phone footage.
+ const width=ratio>1.15?.45:ratio<1/1.15?.55:.5,height=ratio>1.15?.55:ratio<1/1.15?.45:.5;
+ const positions=size=>[0,(1-size)/2,1-size];
+ return positions(height).flatMap(y=>positions(width).map(x=>({x,y,width,height})));
 }
 function unionCrop(boxes,padX=.6,padY=.6){
  // Candidate boxes may be smaller than the minimum user-selectable crop.
@@ -68,5 +74,5 @@ function validate(b,r){
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
 function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.engine===ENGINES.full?'Full':'Lite'} model · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
-const api={ENGINE,ENGINES,validCrop,trackedCrop,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
+const api={ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
 })(globalThis);
