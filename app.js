@@ -21,7 +21,7 @@ function tab(id){
  document.dispatchEvent(new CustomEvent('vxt-tab',{detail:id}));
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{tab(b.dataset.tab);if(b.dataset.tab==='predictor')predictorFields();}));
-function render(){if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
+function render(){document.dispatchEvent(new Event('vxt-coach-reset'));if(!data.athletes.some(a=>a.id===active))active=data.athletes[0]?.id||'';$('#active-athlete').innerHTML=data.athletes.length?data.athletes.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join(''):'<option value="">Add an athlete to begin</option>';$('#active-athlete').value=active;
 try{localStorage.setItem(activeKey,active);}catch{message('Athlete selection could not be remembered.',true);}
 const results=data.results.filter(r=>r.athleteId===active).sort((a,b)=>b.date.localeCompare(a.date));const preds=data.predictions.filter(r=>r.athleteId===active);
 $('#stats').innerHTML=[['ATHLETES',data.athletes.length,'In your roster'],['RESULTS',results.length,'For the active athlete'],['PREDICTIONS',preds.length,'Saved coaching estimates']].map(([a,b,c])=>'<div class="stat"><span class="eyebrow">'+a+'</span><strong>'+b+'</strong><small>'+c+'</small></div>').join('');

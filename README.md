@@ -1,5 +1,9 @@
 # VXT Performance
 
+## Optional AI coach pilot (development branch)
+
+Athlete profile now includes a cloud-evidence preview and an optional AI review. The endpoint is disabled by default. Activating it requires a separately deployed Node backend, server-side model credentials, and an explicit pilot account allowlist; see `server/README.md`. Reviews send selected athlete data to OpenAI only after acknowledgment. Earlier local-only descriptions below describe the default app without this optional integration. Workout generation and saving are not implemented. Automated checks cover adapters, evidence references, account changes, and stale responses; live model/RLS and iPhone verification remain outstanding.
+
 A responsive, local-first coach workspace for sprint testing and athlete progress. No build step, paid service, account, or API key is needed.
 
 ## Run
