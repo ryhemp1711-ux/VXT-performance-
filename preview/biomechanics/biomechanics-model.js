@@ -18,6 +18,13 @@ function cropArea(zoom,cx,cy){
  const size=1/zoom;return {x:Math.max(0,Math.min(1-size,cx-size/2)),y:Math.max(0,Math.min(1-size,cy-size/2)),width:size,height:size};
 }
 function validCrop(c){return !!c&&finite(c.x,0,1)&&finite(c.y,0,1)&&finite(c.width,.05,1)&&finite(c.height,.05,1)&&c.x+c.width<=1.000001&&c.y+c.height<=1.000001;}
+function validGuidedPath(path){return Array.isArray(path)&&path.length>=2&&path.length<=51&&path.every((p,i)=>p&&finite(p.time,0,86400)&&validCrop(p)&&(!i||p.time>path[i-1].time));}
+function guidedCrop(path,time){
+ if(!validGuidedPath(path)||!Number.isFinite(time))throw Error('Set at least two athlete positions in time order.');
+ const right=path.findIndex(p=>p.time>=time),a=right<=0?path[right===0?0:path.length-1]:path[right-1],b=right<=0?a:path[right];
+ const fraction=a===b?0:Math.max(0,Math.min(1,(time-a.time)/(b.time-a.time)));
+ return Object.fromEntries(['x','y','width','height'].map(key=>[key,a[key]+(b[key]-a[key])*fraction]));
+}
 function trackedCrop(path,time){
  if(!Array.isArray(path)||path.length<2||!Number.isFinite(time)||path.some((p,i)=>!finite(p.time,0,86400)||!finite(p.cx,0,1)||!finite(p.cy,0,1)||(i&&p.time<=path[i-1].time)))throw Error('Invalid athlete tracking path.');
  // Keep actual timestamps: missing scan samples must not compress the runner's path.
@@ -68,11 +75,12 @@ function frame(time,poses){
 function validate(b,r){
  if(!b||b.version!==1||!Object.values(ENGINES).includes(b.engine)||b.confirmed!==true||b.view!=='side'||!['left','right'].includes(b.side)||!finite(b.width,1,16384)||!finite(b.height,1,16384)||!Number.isInteger(b.width)||!Number.isInteger(b.height)||b.start!==r.start||b.end!==r.end||!Array.isArray(b.frames)||b.frames.length<1||b.frames.length>51)throw Error('Invalid biomechanics analysis. Reanalyze the marked segment and confirm the tracking.');
  if(b.crop!==undefined){const c=b.crop;if(!validCrop(c))throw Error('Invalid analysis crop.');}
+ if(b.guidedPath!==undefined&&(!validGuidedPath(b.guidedPath)||b.guidedPath[0].time!==r.start||b.guidedPath.at(-1).time!==r.end))throw Error('Invalid guided athlete path.');
  let prev=-1;
  for(const f of b.frames){if(!f||!finite(f.time,r.start,r.end)||f.time<=prev||!['','no-person','multiple-people'].includes(f.reason)||!Array.isArray(f.points)||f.points.length!==(f.reason?0:33))throw Error('Invalid biomechanics frame.');prev=f.time;if(f.crop!==undefined&&!validCrop(f.crop))throw Error('Invalid sample crop.');for(const p of f.points)if(!p||!finite(p.x,0,1)||!finite(p.y,0,1)||!finite(p.visibility,0,1)||!finite(p.presence,0,1))throw Error('Invalid body landmark.');}
  return b;
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
 function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.engine===ENGINES.full?'Full':'Lite'} model · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
-const api={ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
+const api={guidedCrop,validGuidedPath,ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
 })(globalThis);

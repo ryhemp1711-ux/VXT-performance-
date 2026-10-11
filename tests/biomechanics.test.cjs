@@ -83,3 +83,17 @@ test('close phone footage gets a larger following crop that contains the detecte
  const path=[{time:0,cx:.5,cy:.5,width:.4,height:.7},{time:1,cx:.55,cy:.5,width:.4,height:.7}];
  const crop=B.trackedCrop(path,.5);assert.ok(crop.width>=.6);assert.equal(crop.height,1);assert.ok(B.validCrop(crop));
 });
+
+test('guided crops interpolate exact user boxes and reject malformed saved paths',()=>{
+ const path=[{time:1,x:.05,y:.5,width:.15,height:.3},{time:2,x:.65,y:.6,width:.2,height:.25}];
+ assert.ok(B.validGuidedPath(path));const mid=B.guidedCrop(path,1.5);
+ assert.ok(Math.abs(mid.x-.35)<1e-9);assert.ok(Math.abs(mid.width-.175)<1e-9);
+ assert.equal(B.validGuidedPath([...path].reverse()),false);
+ assert.equal(B.validGuidedPath([{...path[0],width:2},path[1]]),false);
+});
+
+test('saved guided path requires matching segment endpoints and valid boxes',()=>{
+ const saved=sample();saved.guidedPath=[{time:1,x:.1,y:.4,width:.2,height:.4},{time:2,x:.6,y:.4,width:.2,height:.4}];
+ assert.doesNotThrow(()=>B.validate(saved,saved));saved.guidedPath[1].time=1.9;
+ assert.throws(()=>B.validate(saved,saved),/guided athlete path/);
+});
