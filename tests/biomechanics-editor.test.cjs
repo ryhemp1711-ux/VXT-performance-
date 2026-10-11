@@ -12,7 +12,7 @@ function editor(){
   append(x){this.options.push(x);if(this.options.length===1)this.value='0';}
   replaceChildren(){this.options=[];}
   toDataURL(type){captures.push({kind:'snapshot',canvas:this,type});return 'data:image/png;base64,fixture';}
-  getContext(){const canvas=this;return new Proxy({},{get:(target,key)=>key==='getImageData'?()=>({width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(canvas.width*canvas.height*4)}):key==='drawImage'?(...args)=>captures.push({kind:'draw',canvas,args,width:canvas.width,height:canvas.height}):()=>{}});}
+  getContext(){const canvas=this;return new Proxy({},{get:(target,key)=>key==='getImageData'?()=>({width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(canvas.width*canvas.height*4)}):['lineTo','arc'].includes(key)?(...args)=>captures.push({kind:key,canvas,args}):key==='drawImage'?(...args)=>captures.push({kind:'draw',canvas,args,width:canvas.width,height:canvas.height}):()=>{}});}
   getBoundingClientRect(){return {left:0,top:0,width:100,height:100};}
   setPointerCapture(id){this.capture=id;} hasPointerCapture(id){return this.capture===id;} releasePointerCapture(){this.capture=null;}
  }
@@ -22,7 +22,7 @@ function editor(){
  el('bio-side-view').checked=true;
  const video=el('video-player');Object.assign(video,{readyState:2,seeking:false,duration:5,videoWidth:1920,videoHeight:1080,pause(){},getAttribute:()=> 'blob:fixture'});
  let time=1;Object.defineProperty(video,'currentTime',{get:()=>time,set:v=>{time=v;queueMicrotask(()=>video.fire('seeked'));}});
- const points=Array.from({length:33},(_,i)=>({x:.2+(i%5)*.1,y:.1+Math.floor(i/5)*.1,visibility:.95,presence:.95}));
+ const points=Array.from({length:33},(_,i)=>({x:.2+(i%5)*.1,y:.1+Math.floor(i/5)*.1,z:0,visibility:.95}));
  const requests=[],state={fail:false,poses:[points]};
  const module={FilesetResolver:{forVisionTasks:async()=>({})},PoseLandmarker:{createFromOptions:async (files,options)=>{requests.push(options);if(state.fail)throw Error('fixture download failure');return {detect:canvas=>{captures.push({kind:'detect',canvas});return {landmarks:state.poses};}};}}};
  const context={document:doc,VXTBiomechanics:B,window:{},Event:class{},structuredClone,performance,setTimeout,clearTimeout,__model:module};
@@ -159,4 +159,14 @@ test('guided area does not turn failed pose detection into usable measurements',
  state.poses=[];await el('bio-run').fire('click');assert.equal(el('bio-confirm').disabled,true);assert.throws(()=>api.getData(),/No usable/);
  await el('bio-guide-add').fire('click');await el('bio-box-cancel').fire('click');assert.equal(el('video-player').controls,true);
  assert.match(el('bio-box-status').textContent,/2 position/);
+});
+
+test('browser-shaped detections render skeleton lines and angles without a presence field',async()=>{
+ const {el,api,captures}=editor();await el('bio-run').fire('click');
+ assert.equal(el('bio-confirm').disabled,false);el('bio-confirm').checked=true;
+ const saved=api.getData();assert.equal(Object.hasOwn(saved.frames[0].points[0],'presence'),false);
+ assert.ok(captures.some(c=>c.kind==='lineTo'),'overlay must draw skeleton segments');
+ assert.ok(captures.some(c=>c.kind==='arc'),'overlay must draw landmark dots');
+ assert.match(el('bio-results').textContent,/\d+°/,'angles must be shown');
+ assert.match(el('bio-inputs').options[0].options[2].textContent,/returned 1 pose/);
 });
