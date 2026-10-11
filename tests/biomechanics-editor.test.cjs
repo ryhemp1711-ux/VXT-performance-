@@ -101,3 +101,31 @@ test('failed portrait search keeps the whole frame instead of suggesting a lower
  await el('bio-auto').fire('click');assert.match(el('bio-status').textContent,/could not confirm/);
  await el('bio-area').fire('click');assert.equal(el('bio-canvas').width,1080);assert.equal(el('bio-canvas').height,1920);
 });
+
+test('auto-find preview and detector use identical source rectangles after model and side changes',async()=>{
+ const {el,api,captures}=editor(),video=el('video-player');el('video-end').value='2';
+ await el('bio-auto').fire('click');
+ const sourceArea=async(time)=>{video.currentTime=time;captures.length=0;await el('bio-area').fire('click');return captures.find(c=>c.kind==='draw'&&c.args.length===9).args.slice(1,5);};
+ const before=await sourceArea(1);
+ el('bio-model').value='full';await el('bio-model').fire('change');
+ el('bio-side').value='right';await el('bio-side').fire('change');
+ assert.deepEqual(await sourceArea(1),before,'changing measurement settings must preserve the selected moving area');
+ assert.match(el('bio-box-status').textContent,/moving crop/);
+ captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
+ const data=api.getData(),draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);
+ assert.equal(draws.length,data.frames.length);
+ for(let i=0;i<data.frames.length;i++)assert.deepEqual(await sourceArea(data.frames[i].time),draws[i].args.slice(1,5),'preview must use the same source rectangle as inference');
+ el('video-end').value='1.8';await el('video-end').fire('input');
+ assert.match(el('bio-box-status').textContent,/Fixed area/,'changing markers must visibly invalidate the old path');
+});
+
+test('analysis-area preview refreshes with playback and stops when analysis replaces it',async()=>{
+ const {el,captures}=editor(),video=el('video-player');await el('bio-auto').fire('click');
+ await el('bio-area').fire('click');captures.length=0;
+ video.currentTime=1.1;await video.fire('timeupdate');
+ assert.ok(captures.some(c=>c.kind==='draw'&&c.args.length===9),'playback must repaint the crop');
+ captures.length=0;await video.fire('seeked');
+ assert.ok(captures.some(c=>c.kind==='draw'&&c.args.length===9),'scrubbing must repaint the crop');
+ await el('bio-run').fire('click');captures.length=0;await video.fire('timeupdate');
+ assert.equal(captures.length,0,'playback must not overwrite a sample skeleton overlay');
+});
