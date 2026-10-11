@@ -118,3 +118,14 @@ test('auto-find preview and detector use identical source rectangles after model
  el('video-end').value='1.8';await el('video-end').fire('input');
  assert.match(el('bio-box-status').textContent,/Fixed area/,'changing markers must visibly invalidate the old path');
 });
+
+test('analysis-area preview refreshes with playback and stops when analysis replaces it',async()=>{
+ const {el,captures}=editor(),video=el('video-player');await el('bio-auto').fire('click');
+ await el('bio-area').fire('click');captures.length=0;
+ video.currentTime=1.1;await video.fire('timeupdate');
+ assert.ok(captures.some(c=>c.kind==='draw'&&c.args.length===9),'playback must repaint the crop');
+ captures.length=0;await video.fire('seeked');
+ assert.ok(captures.some(c=>c.kind==='draw'&&c.args.length===9),'scrubbing must repaint the crop');
+ await el('bio-run').fire('click');captures.length=0;await video.fire('timeupdate');
+ assert.equal(captures.length,0,'playback must not overwrite a sample skeleton overlay');
+});

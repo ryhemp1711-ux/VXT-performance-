@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const $=id=>document.getElementById('bio-'+id),video=document.getElementById('video-player'),B=VXTBiomechanics;
- let analysis=null,generation=0,previewSerial=0,busy=false;
+ let analysis=null,generation=0,previewSerial=0,busy=false,areaPreview=false;
  const engines=new Map();let inputImages=[];let selectedCrop=null,autoPath=[],boxStart=null,boxPointer=null;
  const boxCanvas=$('box-canvas'),boxCtx=boxCanvas.getContext('2d');
  const canvas=$('canvas'),ctx=canvas.getContext('2d');
@@ -9,7 +9,7 @@
  const inferenceSize=(sourceWidth,sourceHeight)=>{const minSide=640,maxSide=1280,scale=Math.max(1,minSide/Math.min(sourceWidth,sourceHeight));const capped=Math.min(scale,maxSide/Math.max(sourceWidth,sourceHeight));return {width:Math.max(1,Math.round(sourceWidth*capped)),height:Math.max(1,Math.round(sourceHeight*capped)),scale:capped};};
  const status=s=>$('status').textContent=s;
  const changed=()=>document.dispatchEvent(new Event('vxt-biomechanics-change'));
- function clearPreview(){ctx.clearRect(0,0,canvas.width,canvas.height);canvas.hidden=true;}
+ function clearPreview(){areaPreview=false;ctx.clearRect(0,0,canvas.width,canvas.height);canvas.hidden=true;}
  const lockedIds=['video-file','video-back','video-forward','video-mark-start','video-mark-end','video-rate','video-fps','video-new','video-start','video-end','video-athlete','bio-side','bio-side-view','bio-frames','bio-preview','bio-zoom','bio-center-x','bio-center-y','bio-area','bio-auto','bio-model','bio-select-box','bio-clear-box'];
  function lock(value){for(const id of lockedIds)document.getElementById(id).disabled=value;video.controls=!value;}
  function cancel(){generation++;previewSerial++;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;}
@@ -176,9 +176,16 @@
    status(`${model==='full'?'Full':'Lite'} · ${seconds.toFixed(1)} seconds · ${report.message}`);
   }catch(e){if(token!==null&&token!==generation)return;cancel();status('Analysis unavailable during '+stage+': '+e.message+' Existing timing and coach notes are still available.');}
  }
+ function drawAreaPreview(){
+  if(!areaPreview||busy||video.readyState<2||video.seeking)return;
+  const c=autoPath.length>=2?B.trackedCrop(autoPath,video.currentTime):cropSettings();
+  canvas.width=Math.max(1,Math.round(video.videoWidth*c.width));canvas.height=Math.max(1,Math.round(video.videoHeight*c.height));
+  ctx.drawImage(video,video.videoWidth*c.x,video.videoHeight*c.y,video.videoWidth*c.width,video.videoHeight*c.height,0,0,canvas.width,canvas.height);canvas.hidden=false;
+ }
  $('area').addEventListener('click',()=>{
- try{if(!video.getAttribute('src')||video.readyState<2||video.seeking)throw Error('Load a video and pause on a clear athlete frame first.');video.pause();const c=autoPath.length>=2?B.trackedCrop(autoPath,video.currentTime):cropSettings();canvas.width=Math.max(1,Math.round(video.videoWidth*c.width));canvas.height=Math.max(1,Math.round(video.videoHeight*c.height));ctx.drawImage(video,video.videoWidth*c.x,video.videoHeight*c.y,video.videoWidth*c.width,video.videoHeight*c.height,0,0,canvas.width,canvas.height);canvas.hidden=false;status(autoPath.length>=2?'Moving analysis area at this playhead. Seek through the segment and check the area again. This is a suggested path, not verified athlete identity.':'Fixed analysis area preview. Keep the whole athlete inside this area for the entire marked segment. This preview is not a detection result.');}catch(e){status(e.message);}
+  try{if(!video.getAttribute('src')||video.readyState<2||video.seeking)throw Error('Load a video and wait for seeking to finish.');areaPreview=true;drawAreaPreview();status(autoPath.length>=2?'Moving analysis area preview. Play or seek the video to check whether the suggested crop follows your athlete. A moving crop is not a confirmed pose detection.':'Fixed analysis area preview. No moving path is active. Play or seek to check the athlete stays inside, or run Auto-find again.');}catch(e){areaPreview=false;status(e.message);}
  });
+ for(const event of ['timeupdate','seeked','loadeddata'])video.addEventListener(event,drawAreaPreview);
  for(const id of ['zoom','center-x','center-y'])$(id).addEventListener('input',()=>{selectedCrop=null;reset();describeCrop();changed();});
  $('model').addEventListener('change',()=>{reset({keepPath:true});changed();});
  $('auto').addEventListener('click',autoFind);
