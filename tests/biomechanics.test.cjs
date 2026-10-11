@@ -97,3 +97,15 @@ test('saved guided path requires matching segment endpoints and valid boxes',()=
  assert.doesNotThrow(()=>B.validate(saved,saved));saved.guidedPath[1].time=1.9;
  assert.throws(()=>B.validate(saved,saved),/guided athlete path/);
 });
+
+test('browser landmark results without presence retain visible joints and measurable angles',()=>{
+ const browserPose=points().map(({presence,...p})=>({...p,z:0}));
+ const f=B.frame(1,B.mapPoses([browserPose],{x:0,y:0,width:1,height:1}));
+ assert.equal(f.points.filter(B.visible).length,33);
+ assert.equal(Object.hasOwn(f.points[0],'presence'),false,'do not invent a confidence score');
+ assert.ok(Object.values(B.measure(f,1920,1080,'left')).some(v=>v!==null));
+ const saved=sample();saved.frames=[f];assert.doesNotThrow(()=>B.validate(JSON.parse(JSON.stringify(saved)),saved));
+ const low={...f.points[0],visibility:.69};assert.equal(B.visible(low),false);
+ assert.equal(B.visible({...f.points[0],presence:.1}),false,'explicit low presence remains rejected');
+ saved.frames[0].points[0].presence=-1;assert.throws(()=>B.validate(saved,saved),/landmark/);
+});

@@ -3,7 +3,7 @@
 const ENGINE='mediapipe-pose-lite-0.10.21-v1';
 const ENGINES={lite:ENGINE,full:'mediapipe-pose-full-0.10.21-v1'};
 const finite=(n,a,b)=>typeof n==='number'&&Number.isFinite(n)&&n>=a&&n<=b;
-function visible(p){return !!p&&finite(p.x,0,1)&&finite(p.y,0,1)&&finite(p.visibility,0.7,1)&&finite(p.presence,0.7,1);}
+function visible(p){return !!p&&finite(p.x,0,1)&&finite(p.y,0,1)&&finite(p.visibility,0.7,1)&&(p.presence===undefined||finite(p.presence,0.7,1));}
 function angle(a,b,c){const u=[a.x-b.x,a.y-b.y],v=[c.x-b.x,c.y-b.y],d=Math.hypot(...u)*Math.hypot(...v);return d<1e-8?null:Math.acos(Math.max(-1,Math.min(1,(u[0]*v[0]+u[1]*v[1])/d)))*180/Math.PI;}
 function measure(frame,width,height,side){
  const empty={knee:null,hip:null,elbow:null,trunk:null};
@@ -68,7 +68,7 @@ function diagnostics(frames,width,height,side,model='lite'){
 function mapPoses(poses,crop){return poses.map(points=>points.map(p=>finite(p.x,0,1)&&finite(p.y,0,1)?{...p,x:crop.x+p.x*crop.width,y:crop.y+p.y*crop.height}:{...p,x:0,y:0,visibility:0,presence:0}));}
 function frame(time,poses){
  if(poses.length!==1)return {time,reason:poses.length?'multiple-people':'no-person',points:[]};
- const points=poses[0].map(p=>({x:p.x,y:p.y,visibility:p.visibility??0,presence:p.presence??0}));
+ const points=poses[0].map(p=>({x:p.x,y:p.y,visibility:p.visibility??0,...(p.presence===undefined?{}:{presence:p.presence})}));
  // Outside-frame predictions are kept as missing points rather than trusted geometry.
  return {time,reason:'',points:points.map(p=>finite(p.x,0,1)&&finite(p.y,0,1)?p:{x:0,y:0,visibility:0,presence:0})};
 }
@@ -77,7 +77,7 @@ function validate(b,r){
  if(b.crop!==undefined){const c=b.crop;if(!validCrop(c))throw Error('Invalid analysis crop.');}
  if(b.guidedPath!==undefined&&(!validGuidedPath(b.guidedPath)||b.guidedPath[0].time!==r.start||b.guidedPath.at(-1).time!==r.end))throw Error('Invalid guided athlete path.');
  let prev=-1;
- for(const f of b.frames){if(!f||!finite(f.time,r.start,r.end)||f.time<=prev||!['','no-person','multiple-people'].includes(f.reason)||!Array.isArray(f.points)||f.points.length!==(f.reason?0:33))throw Error('Invalid biomechanics frame.');prev=f.time;if(f.crop!==undefined&&!validCrop(f.crop))throw Error('Invalid sample crop.');for(const p of f.points)if(!p||!finite(p.x,0,1)||!finite(p.y,0,1)||!finite(p.visibility,0,1)||!finite(p.presence,0,1))throw Error('Invalid body landmark.');}
+ for(const f of b.frames){if(!f||!finite(f.time,r.start,r.end)||f.time<=prev||!['','no-person','multiple-people'].includes(f.reason)||!Array.isArray(f.points)||f.points.length!==(f.reason?0:33))throw Error('Invalid biomechanics frame.');prev=f.time;if(f.crop!==undefined&&!validCrop(f.crop))throw Error('Invalid sample crop.');for(const p of f.points)if(!p||!finite(p.x,0,1)||!finite(p.y,0,1)||!finite(p.visibility,0,1)||(p.presence!==undefined&&!finite(p.presence,0,1)))throw Error('Invalid body landmark.');}
  return b;
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
