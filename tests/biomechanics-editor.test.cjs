@@ -129,3 +129,34 @@ test('analysis-area preview refreshes with playback and stops when analysis repl
  await el('bio-run').fire('click');captures.length=0;await video.fire('timeupdate');
  assert.equal(captures.length,0,'playback must not overwrite a sample skeleton overlay');
 });
+
+test('guided positions replace wrong auto target and move the actual inference crop left to right',async()=>{
+ const {el,api,captures}=editor();el('video-end').value='2';
+ await el('bio-auto').fire('click');
+ const box=async(which,x)=>{await el('bio-guide-'+which).fire('click');await el('bio-box-canvas').fire('pointerdown',{clientX:x,clientY:50});await el('bio-box-canvas').fire('pointerup',{clientX:x+15,clientY:80});};
+ await box('start',5);await el('bio-run').fire('click');assert.match(el('bio-status').textContent,/both the marked start and end/);
+ await box('end',65);await el('bio-auto').fire('click');assert.match(el('bio-status').textContent,/guided athlete path is selected/);
+ el('bio-model').value='full';await el('bio-model').fire('change');
+ captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
+ const saved=api.getData();assert.equal(saved.guidedPath.length,2);
+ const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(draws.length,6);
+ for(let i=0;i<draws.length;i++){
+  assert.ok(Math.abs(saved.frames[i].crop.x-(.05+.6*i/5))<1e-9);
+  assert.ok(Math.abs(draws[i].args[1]-saved.frames[i].crop.x*1920)<1e-9);
+  assert.ok(Math.abs(draws[i].args[3]-1920*.15)<1e-9,'must use selected tight boxes, not auto envelope');
+ }
+ api.reset();api.restore(saved);await el('bio-run').fire('click');el('bio-confirm').checked=true;
+ assert.equal(JSON.stringify(api.getData().guidedPath),JSON.stringify(saved.guidedPath));
+ el('video-player').currentTime=1.5;await box('add',45);
+ await el('bio-run').fire('click');el('bio-confirm').checked=true;assert.equal(api.getData().guidedPath.length,3);
+ await el('bio-clear-box').fire('click');await el('bio-run').fire('click');el('bio-confirm').checked=true;
+ assert.equal(api.getData().guidedPath,undefined);assert.equal(api.getData().frames[0].crop.width,1);
+});
+
+test('guided area does not turn failed pose detection into usable measurements',async()=>{
+ const {el,api,state}=editor();
+ for(const which of ['start','end']){await el('bio-guide-'+which).fire('click');await el('bio-box-canvas').fire('pointerdown',{clientX:10,clientY:30});await el('bio-box-canvas').fire('pointerup',{clientX:30,clientY:80});}
+ state.poses=[];await el('bio-run').fire('click');assert.equal(el('bio-confirm').disabled,true);assert.throws(()=>api.getData(),/No usable/);
+ await el('bio-guide-add').fire('click');await el('bio-box-cancel').fire('click');assert.equal(el('video-player').controls,true);
+ assert.match(el('bio-box-status').textContent,/2 position/);
+});

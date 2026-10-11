@@ -262,3 +262,11 @@ Changing Lite/Full, the measured side, or side-view confirmation now clears old 
 A regression check compares the source rectangles passed to the area preview and detector at every sampled timestamp after model/side changes. These are simulated media checks, not proof of successful real-video detection. Physical iPhone verification remains outstanding.
 
 The analysis-area preview also now refreshes on playback and seek events. Previously it was a single frozen canvas even when a moving path was active. Opening a sample overlay or resetting analysis stops that live preview so it cannot overwrite the overlay. The test page displays v0.17.12 to distinguish this update from a cached page. All 115 automated tests pass; these changes do not establish successful athlete detection in the user's footage.
+
+## Biomechanics test page v0.17.13 — correct a wrong athlete path
+
+When Auto-find chooses a different person or background area, use **Correct the athlete path**. **Set athlete at start** seeks to the marked start and accepts a box around the intended athlete. Repeat with **Set athlete at end**. The analysis crop interpolates those exact boxes at each sample time. Use **Add athlete position here** at intermediate playheads to correct nonlinear movement. Review with **Show analysis area** before analyzing.
+
+This is a user-guided crop, not automatic identity tracking or evidence of successful pose detection. A single endpoint cannot be analyzed. Auto-find cannot silently replace a guided path; use **Use full frame** to clear it. Model/side changes retain positions; marker and source changes clear them. Confirmed reviews retain validated guided positions and per-sample crops. Pose confidence and multiple-person rejection are unchanged.
+
+Validation: automated tests check actual detector crop coordinates moving from the selected left-hand box to the selected right-hand box, intermediate positions, reload, invalid endpoints, cancellation, and withholding measurements when the detector still returns no pose. Browser/iPhone inference remains unverified.
