@@ -13,7 +13,7 @@
  const lockedIds=['video-file','video-back','video-forward','video-mark-start','video-mark-end','video-rate','video-fps','video-new','video-start','video-end','video-athlete','bio-side','bio-side-view','bio-frames','bio-preview','bio-zoom','bio-center-x','bio-center-y','bio-area','bio-auto','bio-model','bio-select-box','bio-clear-box'];
  function lock(value){for(const id of lockedIds)document.getElementById(id).disabled=value;video.controls=!value;}
  function cancel(){generation++;previewSerial++;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;}
- function reset(){cancel();closeBox();inputImages=[];autoPath=[];$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();status('No analysis attached.');}
+ function reset({keepPath=false}={}){const path=keepPath?autoPath:[];cancel();closeBox();inputImages=[];autoPath=path;$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();describeCrop();status('No analysis attached.');}
  function restore(value){selectedCrop=null;reset();describeCrop();analysis=value?structuredClone(value):null;if(analysis){const c=analysis.crop||{x:0,y:0,width:1,height:1};selectedCrop=c;describeCrop();$('model').value=analysis.engine===B.ENGINES.full?'full':'lite';$('zoom').value='1';$('center-x').value=String((c.x+c.width/2)*100);$('center-y').value=String((c.y+c.height/2)*100);$('side').value=analysis.side;$('side-view').checked=true;$('confirm').checked=analysis.confirmed;render();status('Saved measurements loaded. Reselect the original video to inspect overlays.');}}
  function getData(){if(busy)throw Error('Wait for biomechanics analysis or cancel it before saving.');if(!analysis)return undefined;if(!analysis.frames.some(f=>Object.values(B.measure(f,analysis.width,analysis.height,analysis.side)).some(v=>v!==null)))throw Error('No usable body measurements. Adjust the analysis area and retry, or remove analysis to save timing and notes.');if(!$('confirm').checked)throw Error('Review the skeleton samples and confirm the athlete and tracking, or remove the analysis.');return {...analysis,confirmed:true};}
  async function load(model){
@@ -151,7 +151,7 @@
    if(!document.getElementById('video-athlete').value)throw Error('Choose an athlete first.');
    if(!$('side-view').checked)throw Error('Confirm a side-on clip with the full athlete visible.');
    if(document.getElementById('video-start').value===''||!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>video.duration||end-start>10)throw Error('Mark a continuous segment of up to 10 seconds.');
-   const trackingPath=autoPath.slice();reset();autoPath=trackingPath;changed();busy=true;lock(true);$('run').disabled=true;$('cancel').disabled=false;video.pause();token=generation;
+   const trackingPath=autoPath.slice();reset({keepPath:true});changed();busy=true;lock(true);$('run').disabled=true;$('cancel').disabled=false;video.pause();token=generation;
    const side=$('side').value,width=video.videoWidth,height=video.videoHeight,crop=cropSettings(),model=$('model').value,started=performance.now();
    stage='model loading';
    status('Loading body-position model… First use requires internet; video remains on this device.');
@@ -180,16 +180,16 @@
  try{if(!video.getAttribute('src')||video.readyState<2||video.seeking)throw Error('Load a video and pause on a clear athlete frame first.');video.pause();const c=autoPath.length>=2?B.trackedCrop(autoPath,video.currentTime):cropSettings();canvas.width=Math.max(1,Math.round(video.videoWidth*c.width));canvas.height=Math.max(1,Math.round(video.videoHeight*c.height));ctx.drawImage(video,video.videoWidth*c.x,video.videoHeight*c.y,video.videoWidth*c.width,video.videoHeight*c.height,0,0,canvas.width,canvas.height);canvas.hidden=false;status(autoPath.length>=2?'Moving analysis area at this playhead. Seek through the segment and check the area again. This is a suggested path, not verified athlete identity.':'Fixed analysis area preview. Keep the whole athlete inside this area for the entire marked segment. This preview is not a detection result.');}catch(e){status(e.message);}
  });
  for(const id of ['zoom','center-x','center-y'])$(id).addEventListener('input',()=>{selectedCrop=null;reset();describeCrop();changed();});
- $('model').addEventListener('change',()=>{reset();changed();});
+ $('model').addEventListener('change',()=>{reset({keepPath:true});changed();});
  $('auto').addEventListener('click',autoFind);
  $('run').addEventListener('click',run);$('cancel').addEventListener('click',()=>{cancel();status('Analysis canceled.');});
  $('remove').addEventListener('click',()=>{reset();changed();});$('frames').addEventListener('change',preview);$('preview').addEventListener('click',preview);
  $('confirm').addEventListener('change',changed);
- for(const id of ['side','side-view'])$(id).addEventListener('change',()=>{reset();changed();});
+ for(const id of ['side','side-view'])$(id).addEventListener('change',()=>{reset({keepPath:true});changed();});
  for(const id of ['video-start','video-end','video-athlete'])document.getElementById(id).addEventListener('input',()=>{reset();changed();});
  document.getElementById('video-athlete').addEventListener('change',()=>{reset();changed();});
  document.addEventListener('vxt-tab',()=>{if(busy){cancel();status('Analysis canceled after navigation.');}});
- function describeCrop(){const c=cropSettings();$('box-status').textContent=`Fixed area: left ${(c.x*100).toFixed(0)}%, top ${(c.y*100).toFixed(0)}%, width ${(c.width*100).toFixed(0)}%, height ${(c.height*100).toFixed(0)}%. Keep the whole athlete inside throughout the segment.`;}
+ function describeCrop(){if(autoPath.length>=2){$('box-status').textContent='Auto-find moving crop selected. Show analysis area previews the exact source area used by the detector at this playhead. The crop follows the suggested path; verify the athlete stays inside.';return;}const c=cropSettings();$('box-status').textContent=`Fixed area: left ${(c.x*100).toFixed(0)}%, top ${(c.y*100).toFixed(0)}%, width ${(c.width*100).toFixed(0)}%, height ${(c.height*100).toFixed(0)}%. Keep the whole athlete inside throughout the segment.`;}
  function closeBox(){if(boxPointer!==null&&boxCanvas.hasPointerCapture(boxPointer))boxCanvas.releasePointerCapture(boxPointer);boxPointer=null;boxStart=null;$('box-editor').hidden=true;}
  function boxPoint(e){const r=boxCanvas.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};}
  function drawBox(end){boxCtx.drawImage(video,0,0,boxCanvas.width,boxCanvas.height);if(boxStart&&end){boxCtx.strokeStyle='#29ffc6';boxCtx.lineWidth=Math.max(2,boxCanvas.width/250);boxCtx.strokeRect(boxStart.x*boxCanvas.width,boxStart.y*boxCanvas.height,(end.x-boxStart.x)*boxCanvas.width,(end.y-boxStart.y)*boxCanvas.height);}}

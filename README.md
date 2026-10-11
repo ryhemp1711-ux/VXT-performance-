@@ -254,3 +254,9 @@ Auto-find reads the browser-reported intrinsic video dimensions rather than assu
 Motion fallback now searches the full frame and bounds its working image by the longer dimension, including portrait footage. Close-up body candidates enlarge the following crop to keep more of the athlete visible. An inconclusive scan leaves the full frame selected and asks for a manual box rather than inventing a lower-track location. Auto-find yields between tiles so cancellation can be processed on a phone. Camera panning and other moving subjects may still confuse motion fallback; inspect the suggested area before accepting measurements.
 
 Validation: 113 automated tests pass, including complete-frame coverage for phone ratios, portrait detector input proportions, portrait failure behavior and larger body crops. Real mobile decoding/orientation handling and athlete detection quality still require device verification. No change to the main app's video storage or uploads.
+
+## Biomechanics test page v0.17.12 — preserve the selected auto-find area
+
+Changing Lite/Full, the measured side, or side-view confirmation now clears old measurements while preserving Auto-find's moving crop. Previously these controls silently discarded the path while leaving a moving-crop label visible; subsequent analysis used the fixed path envelope instead. Marker changes still invalidate the path, but now immediately label the remaining selection as a fixed area. New videos and manual area changes still clear tracking.
+
+A regression check compares the source rectangles passed to the area preview and detector at every sampled timestamp after model/side changes. These are simulated media checks, not proof of successful real-video detection. Physical iPhone verification remains outstanding.
