@@ -109,3 +109,12 @@ test('browser landmark results without presence retain visible joints and measur
  assert.equal(B.visible({...f.points[0],presence:.1}),false,'explicit low presence remains rejected');
  saved.frames[0].points[0].presence=-1;assert.throws(()=>B.validate(saved,saved),/landmark/);
 });
+
+test('sample ranking distinguishes trunk-only from joint angles without calling either a complete skeleton',()=>{
+ const trunk=points().map(p=>({...p,visibility:0}));trunk[11]={x:.4,y:.2,visibility:.95};trunk[23]={x:.4,y:.6,visibility:.95};
+ const frames=[B.frame(1,[]),B.frame(2,[trunk]),B.frame(3,[points()])];
+ assert.match(B.sampleQuality(frames[1],1920,1080,'left').label,/trunk only/);
+ assert.equal(B.sampleQuality(frames[1],1920,1080,'left').jointAngles,0);
+ assert.equal(B.bestSampleIndex(frames,1920,1080,'left'),2);
+ assert.match(B.diagnostics(frames,1920,1080,'left').message,/1 trunk-only/);
+});

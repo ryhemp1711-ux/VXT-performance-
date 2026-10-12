@@ -59,11 +59,20 @@ function unionCrop(boxes,padX=.6,padY=.6){
  const cropWidth=Math.max(.05,right-x),cropHeight=Math.max(.05,bottom-y);
  return {x:Math.min(x,1-cropWidth),y:Math.min(y,1-cropHeight),width:cropWidth,height:cropHeight};
 }
+function sampleQuality(frame,width,height,side){
+ const metrics=measure(frame,width,height,side),jointAngles=['knee','hip','elbow'].filter(k=>metrics[k]!==null).length,angles=Object.values(metrics).filter(v=>v!==null).length;
+ const joints=(frame.points||[]).filter(visible).length;
+ const label=frame.reason==='no-person'?'No athlete detected':frame.reason==='multiple-people'?'Multiple people':!angles?'Partial detection · no angles':!jointAngles?'Partial detection · trunk only':jointAngles<3?`Partial detection · ${jointAngles}/3 joint angles`:'3/3 joint angles available';
+ return {label,joints,jointAngles,angles,score:frame.reason?-1:jointAngles*100+angles*10+joints};
+}
+function bestSampleIndex(frames,width,height,side){
+ let best=0;for(let i=1;i<frames.length;i++)if(sampleQuality(frames[i],width,height,side).score>sampleQuality(frames[best],width,height,side).score)best=i;return best;
+}
 function diagnostics(frames,width,height,side,model='lite'){
  const total=frames.length,missing=frames.filter(f=>f.reason==='no-person').length,multiple=frames.filter(f=>f.reason==='multiple-people').length;
  const usable=frames.filter(f=>Object.values(measure(f,width,height,side)).some(v=>v!==null)).length;
- const uncertain=total-missing-multiple-usable;
- return {total,missing,multiple,usable,uncertain,message:`${usable}/${total} samples have usable angles; ${missing} no athlete detected; ${multiple} multiple people; ${uncertain} joints below confidence threshold. `+(usable?'Inspect skeleton alignment before confirming. ': '')+(multiple?'Crop to one athlete and retry. ': '')+(missing?(model==='full'?'Check the captured detector inputs below; verify the athlete is visible throughout the crop. ':'Check the captured detector inputs below; try Full if the athlete is clearly visible. '): '')+(uncertain?'Hidden joints, camera angle, small body size or blur can reduce confidence; this is not a sharpness measurement.':'')};
+ const uncertain=total-missing-multiple-usable,trunkOnly=frames.filter(f=>{const q=sampleQuality(f,width,height,side);return q.angles>0&&q.jointAngles===0;}).length;
+ return {total,missing,multiple,usable,uncertain,message:`${usable}/${total} samples have at least one measurable angle (${trunkOnly} trunk-only); this does not mean complete skeletons; ${missing} no athlete detected; ${multiple} multiple people; ${uncertain} joints below confidence threshold. `+(usable?'Inspect skeleton alignment before confirming. ': '')+(multiple?'Crop to one athlete and retry. ': '')+(missing?(model==='full'?'Check the captured detector inputs below; verify the athlete is visible throughout the crop. ':'Check the captured detector inputs below; try Full if the athlete is clearly visible. '): '')+(uncertain?'Hidden joints, camera angle, small body size or blur can reduce confidence; this is not a sharpness measurement.':'')};
 }
 function mapPoses(poses,crop){return poses.map(points=>points.map(p=>finite(p.x,0,1)&&finite(p.y,0,1)?{...p,x:crop.x+p.x*crop.width,y:crop.y+p.y*crop.height}:{...p,x:0,y:0,visibility:0,presence:0}));}
 function frame(time,poses){
@@ -82,5 +91,5 @@ function validate(b,r){
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
 function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.engine===ENGINES.full?'Full':'Lite'} model · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
-const api={guidedCrop,validGuidedPath,ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
+const api={sampleQuality,bestSampleIndex,guidedCrop,validGuidedPath,ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
 })(globalThis);
