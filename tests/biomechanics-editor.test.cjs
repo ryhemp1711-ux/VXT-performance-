@@ -73,7 +73,7 @@ test('pose auto-find retains a moving path and preserves the crop aspect ratio o
   captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
   const data=api.getData();assert.equal(data.frames.length,6);
   for(const frame of data.frames){assert.equal(frame.crop.width,.36);assert.ok(frame.crop.height>=.46);}
-  const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(draws.length,6);
+  const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9&&c.canvas!==el('bio-canvas'));assert.equal(draws.length,6);
   for(const d of draws)assert.ok(Math.abs(d.width/d.height-d.args[3]/d.args[4])<.002,'detector input must keep source crop proportions');
  }
  api.reset();await el('bio-run').fire('click');el('bio-confirm').checked=true;
@@ -89,7 +89,7 @@ test('moving crops do not silently resolve multiple people into a confirmed athl
 test('portrait auto-find scans upper and lower frame and sends unstretched portrait crops',async()=>{
  const {el,captures}=editor(),video=el('video-player');video.videoWidth=1080;video.videoHeight=1920;
  await el('bio-auto').fire('click');
- const scans=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(scans.length,45);
+ const scans=captures.filter(c=>c.kind==='draw'&&c.args.length===9&&c.canvas!==el('bio-canvas'));assert.equal(scans.length,45);
  assert.ok(scans.some(d=>d.args[2]===0));
  assert.ok(scans.some(d=>Math.abs(d.args[2]+d.args[4]-1920)<1e-6));
  for(const d of scans)assert.ok(Math.abs(d.width/d.height-d.args[3]/d.args[4])<.002);
@@ -112,7 +112,7 @@ test('auto-find preview and detector use identical source rectangles after model
  assert.deepEqual(await sourceArea(1),before,'changing measurement settings must preserve the selected moving area');
  assert.match(el('bio-box-status').textContent,/moving crop/);
  captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
- const data=api.getData(),draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);
+ const data=api.getData(),draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9&&c.canvas!==el('bio-canvas'));
  assert.equal(draws.length,data.frames.length);
  for(let i=0;i<data.frames.length;i++)assert.deepEqual(await sourceArea(data.frames[i].time),draws[i].args.slice(1,5),'preview must use the same source rectangle as inference');
  el('video-end').value='1.8';await el('video-end').fire('input');
@@ -139,7 +139,7 @@ test('guided positions replace wrong auto target and move the actual inference c
  el('bio-model').value='full';await el('bio-model').fire('change');
  captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
  const saved=api.getData();assert.equal(saved.guidedPath.length,2);
- const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);assert.equal(draws.length,6);
+ const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9&&c.canvas!==el('bio-canvas'));assert.equal(draws.length,6);
  for(let i=0;i<draws.length;i++){
   assert.ok(Math.abs(saved.frames[i].crop.x-(.05+.6*i/5))<1e-9);
   assert.ok(Math.abs(draws[i].args[1]-saved.frames[i].crop.x*1920)<1e-9);
@@ -169,4 +169,19 @@ test('browser-shaped detections render skeleton lines and angles without a prese
  assert.ok(captures.some(c=>c.kind==='arc'),'overlay must draw landmark dots');
  assert.match(el('bio-results').textContent,/\d+°/,'angles must be shown');
  assert.match(el('bio-inputs').options[0].options[2].textContent,/returned 1 pose/);
+});
+
+test('review selects strongest sample and maps landmarks into enlarged crop with full-frame toggle',async()=>{
+ const {el,api,captures,state}=editor();const crop={x:.2,y:.3,width:.4,height:.5};
+ const pose=state.poses[0],frame=B.frame(1.2,B.mapPoses([pose],crop));frame.crop=crop;
+ api.restore({version:1,engine:B.ENGINE,confirmed:true,view:'side',side:'left',width:1920,height:1080,start:1,end:1.2,crop,frames:[B.frame(1,[]),frame]});
+ assert.equal(el('bio-frames').value,'1');assert.match(el('bio-frames').options[0].textContent,/No athlete/);
+ captures.length=0;await el('bio-preview').fire('click');
+ const draw=captures.find(c=>c.kind==='draw'&&c.canvas===el('bio-canvas'));
+ assert.deepEqual(draw.args.slice(1,5),[384,324,768,540]);
+ const dot=captures.find(c=>c.kind==='arc');
+ assert.ok(Math.abs(dot.args[0]-pose[0].x*draw.width)<1e-8);assert.ok(Math.abs(dot.args[1]-pose[0].y*draw.height)<1e-8);assert.equal(dot.args[2],2.5);
+ el('bio-full-context').checked=true;captures.length=0;await el('bio-full-context').fire('change');
+ const full=captures.find(c=>c.kind==='draw'&&c.canvas===el('bio-canvas'));
+ assert.deepEqual(full.args.slice(1,5),[0,0,1920,1080]);assert.equal(el('bio-frames').value,'1');
 });
