@@ -3,7 +3,7 @@
 const ENGINE='mediapipe-pose-lite-0.10.21-v1';
 const ENGINES={lite:ENGINE,full:'mediapipe-pose-full-0.10.21-v1'};
 const finite=(n,a,b)=>typeof n==='number'&&Number.isFinite(n)&&n>=a&&n<=b;
-function visible(p){return !!p&&finite(p.x,0,1)&&finite(p.y,0,1)&&finite(p.visibility,0.7,1)&&(p.presence===undefined||finite(p.presence,0.7,1));}
+function visible(p){return !!p&&finite(p.x,0,1)&&finite(p.y,0,1)&&(p.manual===true||(finite(p.visibility,0.7,1)&&(p.presence===undefined||finite(p.presence,0.7,1))));}
 function angle(a,b,c){const u=[a.x-b.x,a.y-b.y],v=[c.x-b.x,c.y-b.y],d=Math.hypot(...u)*Math.hypot(...v);return d<1e-8?null:Math.acos(Math.max(-1,Math.min(1,(u[0]*v[0]+u[1]*v[1])/d)))*180/Math.PI;}
 function measure(frame,width,height,side){
  const empty={knee:null,hip:null,elbow:null,trunk:null};
@@ -81,15 +81,21 @@ function frame(time,poses){
  // Outside-frame predictions are kept as missing points rather than trusted geometry.
  return {time,reason:'',points:points.map(p=>finite(p.x,0,1)&&finite(p.y,0,1)?p:{x:0,y:0,visibility:0,presence:0})};
 }
+function correctJoint(frame,index,x,y){
+ if(![11,12,13,14,15,16,23,24,25,26,27,28].includes(index)||!finite(x,0,1)||!finite(y,0,1))throw Error('Invalid joint placement.');
+ const points=frame.reason?Array.from({length:33},()=>({x:0,y:0,visibility:0})):frame.points.map(p=>({...p}));
+ points[index]={x,y,visibility:0,manual:true};
+ return {...frame,reason:'',points};
+}
 function validate(b,r){
  if(!b||b.version!==1||!Object.values(ENGINES).includes(b.engine)||b.confirmed!==true||b.view!=='side'||!['left','right'].includes(b.side)||!finite(b.width,1,16384)||!finite(b.height,1,16384)||!Number.isInteger(b.width)||!Number.isInteger(b.height)||b.start!==r.start||b.end!==r.end||!Array.isArray(b.frames)||b.frames.length<1||b.frames.length>51)throw Error('Invalid biomechanics analysis. Reanalyze the marked segment and confirm the tracking.');
  if(b.crop!==undefined){const c=b.crop;if(!validCrop(c))throw Error('Invalid analysis crop.');}
  if(b.guidedPath!==undefined&&(!validGuidedPath(b.guidedPath)||b.guidedPath[0].time!==r.start||b.guidedPath.at(-1).time!==r.end))throw Error('Invalid guided athlete path.');
  let prev=-1;
- for(const f of b.frames){if(!f||!finite(f.time,r.start,r.end)||f.time<=prev||!['','no-person','multiple-people'].includes(f.reason)||!Array.isArray(f.points)||f.points.length!==(f.reason?0:33))throw Error('Invalid biomechanics frame.');prev=f.time;if(f.crop!==undefined&&!validCrop(f.crop))throw Error('Invalid sample crop.');for(const p of f.points)if(!p||!finite(p.x,0,1)||!finite(p.y,0,1)||!finite(p.visibility,0,1)||(p.presence!==undefined&&!finite(p.presence,0,1)))throw Error('Invalid body landmark.');}
+ for(const f of b.frames){if(!f||!finite(f.time,r.start,r.end)||f.time<=prev||!['','no-person','multiple-people'].includes(f.reason)||!Array.isArray(f.points)||f.points.length!==(f.reason?0:33))throw Error('Invalid biomechanics frame.');prev=f.time;if(f.crop!==undefined&&!validCrop(f.crop))throw Error('Invalid sample crop.');for(const p of f.points)if(!p||!finite(p.x,0,1)||!finite(p.y,0,1)||!finite(p.visibility,0,1)||(p.presence!==undefined&&!finite(p.presence,0,1))||(p.manual!==undefined&&typeof p.manual!=='boolean'))throw Error('Invalid body landmark.');}
  return b;
 }
 const labels={knee:'Knee included angle',hip:'Hip included angle',elbow:'Elbow included angle',trunk:'Trunk tilt from image vertical'};
-function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.engine===ENGINES.full?'Full':'Lite'} model · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
-const api={sampleQuality,bestSampleIndex,guidedCrop,validGuidedPath,ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
+function describe(b){const valid=b.frames.filter(f=>Object.values(measure(f,b.width,b.height,b.side)).some(x=>x!==null)).length;return `Experimental 2D biomechanics · ${b.engine===ENGINES.full?'Full':'Lite'} model · ${b.side} side · ${valid}/${b.frames.length} sampled frames assessable · ${b.frames.filter(f=>f.points.some(p=>p.manual)).length} manually corrected samples · coach reviewed. Angles are image-plane estimates, not 3D measurements or a technique score.`;}
+const api={correctJoint,sampleQuality,bestSampleIndex,guidedCrop,validGuidedPath,ENGINE,ENGINES,validCrop,trackedCrop,videoFormat,boxCrop,autoScanCrops,unionCrop,diagnostics,cropArea,mapPoses,visible,angle,measure,frame,validate,labels,describe};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.VXTBiomechanics=api;
 })(globalThis);
