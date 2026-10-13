@@ -284,3 +284,12 @@ Sample labels now distinguish no detection, multiple people, partial detection w
 The overlay defaults to an enlarged per-sample analysis crop with thinner lines and smaller dots. **Show full-frame context** restores the full image and amber crop outline. Landmark coordinates are transformed into the displayed crop without changing detection or measurements. Diagnostic cards explain that their first/middle/last timestamps are independent of the selected overlay sample. Missing joints remain hidden; no confidence thresholds are lowered.
 
 Validation: 123 tests pass, including trunk-only ranking and exact overlay coordinate mapping between enlarged and full-frame views. These verify presentation and coordinate handling with simulated detector results, not improved real-video inference quality.
+
+
+## Biomechanics test page v0.17.16 — captured-frame review and manual correction
+
+Analysis freezes each source frame before cropping it for the detector. Overlays reuse its lossless PNG during the current analysis session, including full-frame context, without seeking the video again. A 96 MiB encoded-string budget stops oversized runs with a shorter-segment prompt; images stay out of saved reviews and backups. Restored reviews explicitly show that their reopened video frame is not the retained capture and require reanalysis before editing.
+
+Select Correct joint positions, choose the athlete's left/right shoulder, elbow, wrist, hip, knee or ankle, and tap or press-drag-release on the image. Missing detections can be populated manually. Gold points/edges indicate corrections; untouched predictions remain green. Angles recalculate from the edited coordinates, provenance is saved without inventing detector confidence, and every correction/undo clears review confirmation. Undo restores the original detection for the selected sample during the current session.
+
+Validation: 125 automated tests, including captured-image preview without reseeking, manual recovery of a missed detection, a known 90-degree angle, saving correction provenance, confirmation invalidation and undo isolation. Media/canvas tests are simulated; physical iPhone/Safari image decoding and touch interactions still require verification. This update does not improve the pose model or add temporal tracking/quality rejection.

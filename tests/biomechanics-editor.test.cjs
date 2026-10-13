@@ -5,13 +5,14 @@ const B=require('../preview/biomechanics/biomechanics-model.js');
 function editor(){
  const captures=[];
  class Element {
-  constructor(){this.value='';this.handlers={};this.hidden=false;this.disabled=false;this.checked=false;this.textContent='';this.options=[];}
+  constructor(){this.style={};this.value='';this.handlers={};this.hidden=false;this.disabled=false;this.checked=false;this.textContent='';this.options=[];}
   addEventListener(type,fn){(this.handlers[type]??=[]).push(fn);}
   removeEventListener(type,fn){this.handlers[type]=(this.handlers[type]||[]).filter(x=>x!==fn);}
   async fire(type,data={}){for(const fn of this.handlers[type]||[])await fn({pointerId:1,button:0,preventDefault(){},...data});}
   append(x){this.options.push(x);if(this.options.length===1)this.value='0';}
   replaceChildren(){this.options=[];}
   toDataURL(type){captures.push({kind:'snapshot',canvas:this,type});return 'data:image/png;base64,fixture';}
+  async decode(){}
   getContext(){const canvas=this;return new Proxy({},{get:(target,key)=>key==='getImageData'?()=>({width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(canvas.width*canvas.height*4)}):['lineTo','arc'].includes(key)?(...args)=>captures.push({kind:key,canvas,args}):key==='drawImage'?(...args)=>captures.push({kind:'draw',canvas,args,width:canvas.width,height:canvas.height}):()=>{}});}
   getBoundingClientRect(){return {left:0,top:0,width:100,height:100};}
   setPointerCapture(id){this.capture=id;} hasPointerCapture(id){return this.capture===id;} releasePointerCapture(){this.capture=null;}
@@ -58,7 +59,8 @@ test('diagnostics snapshot the same canvas immediately before inference and reta
  await el('bio-run').fire('click');assert.equal(el('bio-input-panel').hidden,false);
  const cards=el('bio-inputs').options;assert.equal(cards.length,3);
  for(const index of [1,3,6])assert.match(cards[[1,3,6].indexOf(index)].options[0].textContent,new RegExp('Sample '+index+'/6'));
- for(let i=0;i<captures.length;i++)if(captures[i].kind==='snapshot'){
+ assert.equal(captures.filter((c,i)=>c.kind==='snapshot'&&captures[i+1]?.kind==='detect').length,3);
+ for(let i=0;i<captures.length;i++)if(captures[i].kind==='snapshot'&&captures[i+1]?.kind==='detect'){
   assert.equal(captures[i+1].kind,'detect');assert.equal(captures[i].canvas,captures[i+1].canvas);assert.equal(captures[i].type,'image/png');
  }
  for(const card of cards)assert.match(card.options[2].textContent,/returned 0 pose/);
@@ -184,4 +186,28 @@ test('review selects strongest sample and maps landmarks into enlarged crop with
  el('bio-full-context').checked=true;captures.length=0;await el('bio-full-context').fire('change');
  const full=captures.find(c=>c.kind==='draw'&&c.canvas===el('bio-canvas'));
  assert.deepEqual(full.args.slice(1,5),[0,0,1920,1080]);assert.equal(el('bio-frames').value,'1');
+});
+
+test('overlays reuse frozen source images without another video seek',async()=>{
+ const {el,captures}=editor();await el('bio-run').fire('click');
+ const player=el('video-player');player.currentTime=4;
+ await el('bio-preview').fire('click');assert.equal(player.currentTime,4);
+ const draw=captures.filter(c=>c.kind==='draw'&&c.canvas===el('bio-canvas')).at(-1);
+ assert.match(draw.args[0].src,/^data:image\/png/);assert.match(el('bio-frame-source').textContent,/Exact captured frame/);
+ assert.equal(el('bio-edit-joints').disabled,false);
+});
+test('manual placement recovers missed detections, invalidates confirmation, saves provenance and undoes',async()=>{
+ const {el,api,state}=editor();state.poses=[];await el('bio-run').fire('click');
+ const canvas=el('bio-canvas');
+ for(const [joint,x,y] of [[23,40,40],[25,40,60],[27,60,60]]){
+  el('bio-edit-joints').checked=true;el('bio-joint').value=String(joint);
+  await canvas.fire('pointerdown',{clientX:x,clientY:y});await canvas.fire('pointerup',{clientX:x,clientY:y});
+ }
+ assert.match(el('bio-results').textContent,/Manually corrected/);assert.match(el('bio-results').textContent,/90°/);
+ assert.equal(el('bio-confirm').disabled,false);assert.equal(el('bio-confirm').checked,false);
+ el('bio-confirm').checked=true;const saved=api.getData();assert.equal(saved.frames[0].points[25].manual,true);
+ assert.equal(saved.frames[0].points[25].visibility,0);B.validate(saved,saved);
+ await el('bio-undo-joints').fire('click');assert.match(el('bio-results').textContent,/No athlete detected/);assert.equal(el('bio-confirm').disabled,true);
+ api.restore(saved);await el('bio-preview').fire('click');assert.equal(el('bio-edit-joints').disabled,true);
+ assert.match(el('bio-results').textContent,/Manually corrected/);
 });

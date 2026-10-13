@@ -1,6 +1,7 @@
 'use strict';
 (()=>{
  const $=id=>document.getElementById('bio-'+id),video=document.getElementById('video-player'),B=VXTBiomechanics;
+ let snapshots=[],originalFrames=new Map(),displayed=null;
  let analysis=null,generation=0,previewSerial=0,busy=false,areaPreview=false;
  const engines=new Map();let inputImages=[];let selectedCrop=null,autoPath=[],guidedPath=[],guideTime=null,boxStart=null,boxPointer=null;
  const boxCanvas=$('box-canvas'),boxCtx=boxCanvas.getContext('2d');
@@ -10,13 +11,13 @@
  const inferenceSize=(sourceWidth,sourceHeight)=>{const minSide=640,maxSide=1280,scale=Math.max(1,minSide/Math.min(sourceWidth,sourceHeight));const capped=Math.min(scale,maxSide/Math.max(sourceWidth,sourceHeight));return {width:Math.max(1,Math.round(sourceWidth*capped)),height:Math.max(1,Math.round(sourceHeight*capped)),scale:capped};};
  const status=s=>$('status').textContent=s;
  const changed=()=>document.dispatchEvent(new Event('vxt-biomechanics-change'));
- function clearPreview(){areaPreview=false;ctx.clearRect(0,0,canvas.width,canvas.height);canvas.hidden=true;}
- const lockedIds=['video-file','video-back','video-forward','video-mark-start','video-mark-end','video-rate','video-fps','video-new','video-start','video-end','video-athlete','bio-side','bio-side-view','bio-frames','bio-preview','bio-zoom','bio-center-x','bio-center-y','bio-area','bio-auto','bio-model','bio-select-box','bio-clear-box','bio-guide-start','bio-guide-end','bio-guide-add','bio-full-context'];
+ function clearPreview(){displayed=null;$('edit-joints').checked=false;$('edit-joints').disabled=true;$('undo-joints').disabled=true;canvas.style.touchAction='auto';areaPreview=false;ctx.clearRect(0,0,canvas.width,canvas.height);canvas.hidden=true;}
+ const lockedIds=['video-file','video-back','video-forward','video-mark-start','video-mark-end','video-rate','video-fps','video-new','video-start','video-end','video-athlete','bio-side','bio-side-view','bio-frames','bio-preview','bio-zoom','bio-center-x','bio-center-y','bio-area','bio-auto','bio-model','bio-select-box','bio-clear-box','bio-guide-start','bio-guide-end','bio-guide-add','bio-full-context','bio-edit-joints','bio-joint','bio-undo-joints'];
  function lock(value){for(const id of lockedIds)document.getElementById(id).disabled=value;video.controls=!value;}
  function cancel(){generation++;previewSerial++;busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;}
- function reset({keepPath=false}={}){const path=keepPath?autoPath:[],guided=keepPath?guidedPath:[];cancel();closeBox();inputImages=[];autoPath=path;guidedPath=guided;$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();describeCrop();status('No analysis attached.');}
- function restore(value){selectedCrop=null;reset();describeCrop();analysis=value?structuredClone(value):null;if(analysis){const c=analysis.crop||{x:0,y:0,width:1,height:1};selectedCrop=c;guidedPath=analysis.guidedPath||[];describeCrop();$('model').value=analysis.engine===B.ENGINES.full?'full':'lite';$('zoom').value='1';$('center-x').value=String((c.x+c.width/2)*100);$('center-y').value=String((c.y+c.height/2)*100);$('side').value=analysis.side;$('side-view').checked=true;$('confirm').checked=analysis.confirmed;render();status('Saved measurements loaded. Reselect the original video to inspect overlays.');}}
- function getData(){if(busy)throw Error('Wait for biomechanics analysis or cancel it before saving.');if(!analysis)return undefined;if(!analysis.frames.some(f=>Object.values(B.measure(f,analysis.width,analysis.height,analysis.side)).some(v=>v!==null)))throw Error('No usable body measurements. Adjust the analysis area and retry, or remove analysis to save timing and notes.');if(!$('confirm').checked)throw Error('Review the skeleton samples and confirm the athlete and tracking, or remove the analysis.');return {...analysis,confirmed:true};}
+ function reset({keepPath=false}={}){const path=keepPath?autoPath:[],guided=keepPath?guidedPath:[];cancel();closeBox();snapshots=[];originalFrames.clear();inputImages=[];autoPath=path;guidedPath=guided;$('inputs').replaceChildren();$('input-panel').hidden=true;analysis=null;$('confirm').checked=false;$('confirm').disabled=false;$('frames').replaceChildren();$('results').textContent='';clearPreview();describeCrop();status('No analysis attached.');}
+ function restore(value){selectedCrop=null;reset();describeCrop();analysis=value?structuredClone(value):null;if(analysis){const c=analysis.crop||{x:0,y:0,width:1,height:1};selectedCrop=c;guidedPath=analysis.guidedPath||[];describeCrop();$('model').value=analysis.engine===B.ENGINES.full?'full':'lite';$('zoom').value='1';$('center-x').value=String((c.x+c.width/2)*100);$('center-y').value=String((c.y+c.height/2)*100);$('side').value=analysis.side;$('side-view').checked=true;$('confirm').checked=analysis.confirmed;render();status('Saved measurements loaded. Reselect the original video to inspect overlays. Reanalyze to enable exact-frame correction.');}}
+ function getData(){if(busy)throw Error('Wait for biomechanics analysis or cancel it before saving.');if(!analysis)return undefined;if(!analysis.frames.some(f=>Object.values(B.measure(f,analysis.width,analysis.height,analysis.side)).some(v=>v!==null)))throw Error('No usable body measurements. Adjust the analysis area and retry, or remove analysis to save timing and notes.');if(!$('confirm').checked)throw Error('Review the skeleton samples and confirm the athlete and tracking, or remove the analysis.');return structuredClone({...analysis,confirmed:true});}
  async function load(model){
   if(!Object.hasOwn(B.ENGINES,model))throw Error('Choose Lite or Full.');
   if(!engines.has(model))engines.set(model,(async()=>{const {FilesetResolver,PoseLandmarker}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs');const files=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');return PoseLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${model}/float16/1/pose_landmarker_${model}.task`,delegate:'CPU'},runningMode:'IMAGE',numPoses:2,minPoseDetectionConfidence:0.6,minPosePresenceConfidence:0.6});})().catch(e=>{engines.delete(model);throw e;}));
@@ -30,25 +31,25 @@
  });}
  function render(){
   $('frames').replaceChildren();if(!analysis)return;
-  analysis.frames.forEach((f,i)=>{const option=document.createElement('option');option.value=i;option.textContent=`${f.time.toFixed(3)} s · ${B.sampleQuality(f,analysis.width,analysis.height,analysis.side).label}`;$('frames').append(option);});
+  analysis.frames.forEach((f,i)=>{const option=document.createElement('option');option.value=i;option.textContent=`${f.time.toFixed(3)} s · ${f.points.some(p=>p.manual)?'Manually corrected · ':''}${B.sampleQuality(f,analysis.width,analysis.height,analysis.side).label}`;$('frames').append(option);});
   const best=B.bestSampleIndex(analysis.frames,analysis.width,analysis.height,analysis.side);$('frames').value=String(best);showMetrics(best);
  }
  function showMetrics(index){
   const f=analysis?.frames[index];if(!f)return;const m=B.measure(f,analysis.width,analysis.height,analysis.side);
-  $('results').textContent=`${f.time.toFixed(3)} s · ${B.sampleQuality(f,analysis.width,analysis.height,analysis.side).label} · `+Object.entries(m).map(([k,v])=>`${B.labels[k]}: ${v===null?'not assessable':v.toFixed(0)+'°'}`).join(' · ')+'. '+(f.reason==='multiple-people'?'More than one person detected. Use a clip with one athlete.':f.reason==='no-person'?'Body not detected in this sample. Check the amber box: if your athlete is outside it, use Correct the athlete path. If inside, inspect Actual detector inputs.':'Check that the skeleton follows the correct athlete. Compare the same stride phase; no ideal-angle target is assumed.');
+  $('results').textContent=`${f.time.toFixed(3)} s · ${f.points.some(p=>p.manual)?'Manually corrected · ':''}${B.sampleQuality(f,analysis.width,analysis.height,analysis.side).label} · `+Object.entries(m).map(([k,v])=>`${B.labels[k]}: ${v===null?'not assessable':v.toFixed(0)+'°'}`).join(' · ')+'. '+(f.reason==='multiple-people'?'More than one person detected. Use a clip with one athlete.':f.reason==='no-person'?'Body not detected in this sample. Check the amber box: if your athlete is outside it, use Correct the athlete path. If inside, inspect Actual detector inputs.':'Check that the skeleton follows the correct athlete. Compare the same stride phase; no ideal-angle target is assumed.');
  }
  async function preview(){
   if(!analysis)return;const index=Number($('frames').value),f=analysis.frames[index],token=generation,serial=++previewSerial;showMetrics(index);clearPreview();
-  if(!video.getAttribute('src')||video.readyState<2)return;
-  try{video.pause();await seek(f.time,token);if(token!==generation||serial!==previewSerial)return;const full=$('full-context').checked,c=full?{x:0,y:0,width:1,height:1}:f.crop||analysis.crop||{x:0,y:0,width:1,height:1};
+  if(!snapshots[index]&&(!video.getAttribute('src')||video.readyState<2))return;
+  try{let source;if(snapshots[index]){source=document.createElement('img');source.src=snapshots[index];await source.decode();}else{video.pause();await seek(f.time,token);source=video;}if(token!==generation||serial!==previewSerial)return;const full=$('full-context').checked,c=full?{x:0,y:0,width:1,height:1}:f.crop||analysis.crop||{x:0,y:0,width:1,height:1};
    const sourceWidth=analysis.width*c.width,sourceHeight=analysis.height*c.height,scale=960/Math.max(sourceWidth,sourceHeight);
    canvas.width=Math.max(1,Math.round(sourceWidth*scale));canvas.height=Math.max(1,Math.round(sourceHeight*scale));
-   ctx.drawImage(video,c.x*analysis.width,c.y*analysis.height,sourceWidth,sourceHeight,0,0,canvas.width,canvas.height);ctx.lineWidth=1.5;ctx.strokeStyle='#29ffc6';ctx.fillStyle='#29ffc6';
+   ctx.drawImage(source,c.x*analysis.width,c.y*analysis.height,sourceWidth,sourceHeight,0,0,canvas.width,canvas.height);ctx.lineWidth=1.5;ctx.strokeStyle='#29ffc6';ctx.fillStyle='#29ffc6';
    if(full&&f.crop){ctx.strokeStyle='#ffcb69';ctx.strokeRect(f.crop.x*canvas.width,f.crop.y*canvas.height,f.crop.width*canvas.width,f.crop.height*canvas.height);ctx.strokeStyle='#29ffc6';}
    const inView=p=>B.visible(p)&&p.x>=c.x&&p.x<=c.x+c.width&&p.y>=c.y&&p.y<=c.y+c.height;
    const xy=p=>[(p.x-c.x)/c.width*canvas.width,(p.y-c.y)/c.height*canvas.height];
-   for(const [a,b] of [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]]){const p=f.points[a],q=f.points[b];if(inView(p)&&inView(q)){ctx.beginPath();ctx.moveTo(...xy(p));ctx.lineTo(...xy(q));ctx.stroke();}}
-   for(const p of f.points)if(inView(p)){ctx.beginPath();ctx.arc(...xy(p),2.5,0,2*Math.PI);ctx.fill();}canvas.hidden=false;
+   for(const [a,b] of [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]]){const p=f.points[a],q=f.points[b];if(inView(p)&&inView(q)){ctx.strokeStyle=p.manual||q.manual?'#ffcb69':'#29ffc6';ctx.beginPath();ctx.moveTo(...xy(p));ctx.lineTo(...xy(q));ctx.stroke();}}
+   for(const p of f.points)if(inView(p)){ctx.fillStyle=p.manual?'#ffcb69':'#29ffc6';ctx.beginPath();ctx.arc(...xy(p),2.5,0,2*Math.PI);ctx.fill();}canvas.hidden=false;displayed={index,c};$('edit-joints').disabled=!snapshots[index];$('undo-joints').disabled=!originalFrames.has(index);$('frame-source').textContent=snapshots[index]?'Exact captured frame · retained for this analysis session.':'Reopened video frame · exact captured image unavailable. Reanalyze before correcting joints.';
   }catch(e){status(e.message);}
  }
  function inspectInput(capture,index,count,time,model){
@@ -164,6 +165,7 @@
    stage='model loading';
    status('Loading body-position model… First use requires internet; video remains on this device.');
    const detector=await load(model);if(token!==generation)return;
+   const sourceFrame=document.createElement('canvas');sourceFrame.width=width;sourceFrame.height=height;const sourceCtx=sourceFrame.getContext('2d');let snapshotBytes=0;
    const capture=document.createElement('canvas'),captureCtx=capture.getContext('2d');const frames=[],count=Math.min(51,Math.ceil((end-start)*5)+1);
    for(let i=0;i<count;i++){
     stage='video decoding / seeking';const time=start+(end-start)*i/(count-1);await seek(time,token);if(token!==generation)return;
@@ -172,7 +174,12 @@
     const inputSize=inferenceSize(width*inferenceCrop.width,height*inferenceCrop.height);
     // Size from this frame's crop, not the wider path envelope, to avoid stretching the athlete.
     capture.width=inputSize.width;capture.height=inputSize.height;
-    captureCtx.drawImage(video,width*inferenceCrop.x,height*inferenceCrop.y,width*inferenceCrop.width,height*inferenceCrop.height,0,0,capture.width,capture.height);
+    // Freeze once: inference and every overlay share these source pixels.
+    sourceCtx.drawImage(video,0,0,width,height);
+    const snapshot=sourceFrame.toDataURL('image/png');if(!snapshot.startsWith('data:image/png'))throw Error('Cannot retain the captured frame. Try a shorter or smaller video.');snapshotBytes+=snapshot.length*2;
+    if(snapshotBytes>96*1024*1024)throw Error('Frame review memory limit reached. Select a shorter segment and retry.');
+    snapshots.push(snapshot);
+    captureCtx.drawImage(sourceFrame,width*inferenceCrop.x,height*inferenceCrop.y,width*inferenceCrop.width,height*inferenceCrop.height,0,0,capture.width,capture.height);
     const inputResult=inspectInput(capture,i,count,time,model);let result;
     try{result=detector.detect(capture);if(inputResult)inputResult.textContent=`Detector returned ${result.landmarks.length} pose(s) for this input.`;}catch(e){if(inputResult)inputResult.textContent='Detector call failed: '+e.message;throw e;}
     // A moving crop is not proof of identity: keep multiple-person samples ambiguous.
@@ -182,7 +189,7 @@
    analysis={version:1,engine:B.ENGINES[model],view:'side',side,width,height,start,end,crop,...(guidedPath.length>=2?{guidedPath:structuredClone(guidedPath)}:{}),confirmed:false,frames};busy=false;lock(false);$('run').disabled=false;$('cancel').disabled=true;render();changed();const seconds=(performance.now()-started)/1000;await preview();if(token!==generation)return;
    const report=B.diagnostics(frames,width,height,side,model);$('confirm').disabled=report.usable===0;
    status(`${model==='full'?'Full':'Lite'} · ${seconds.toFixed(1)} seconds · ${report.message}`);
-  }catch(e){if(token!==null&&token!==generation)return;cancel();status('Analysis unavailable during '+stage+': '+e.message+' Existing timing and coach notes are still available.');}
+  }catch(e){if(token!==null&&token!==generation)return;cancel();snapshots=[];status('Analysis unavailable during '+stage+': '+e.message+' Existing timing and coach notes are still available.');}
  }
  function drawAreaPreview(){
   if(!areaPreview||busy||video.readyState<2||video.seeking)return;
@@ -199,6 +206,27 @@
  $('auto').addEventListener('click',autoFind);
  $('run').addEventListener('click',run);$('cancel').addEventListener('click',()=>{cancel();status('Analysis canceled.');});
  $('remove').addEventListener('click',()=>{reset();changed();});$('frames').addEventListener('change',preview);$('preview').addEventListener('click',preview);
+ $('edit-joints').addEventListener('change',()=>{canvas.style.touchAction=$('edit-joints').checked?'none':'auto';});
+ function refreshCorrection(index){
+  analysis.confirmed=false;$('confirm').checked=false;$('confirm').disabled=!analysis.frames.some(f=>Object.values(B.measure(f,analysis.width,analysis.height,analysis.side)).some(v=>v!==null));
+  const f=analysis.frames[index];$('frames').options[index].textContent=`${f.time.toFixed(3)} s · ${f.points.some(p=>p.manual)?'Manually corrected · ':''}${B.sampleQuality(f,analysis.width,analysis.height,analysis.side).label}`;changed();
+ }
+ let jointPointer=null;
+ canvas.addEventListener('pointerdown',e=>{if(busy||!displayed||!$('edit-joints').checked||e.button!==0)return;e.preventDefault();jointPointer={id:e.pointerId,index:displayed.index,c:displayed.c};canvas.setPointerCapture(e.pointerId);});
+ canvas.addEventListener('pointerup',async e=>{
+  const drag=jointPointer;jointPointer=null;if(!drag||drag.id!==e.pointerId)return;
+  if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+  if(busy||!displayed||displayed.index!==drag.index||!$('edit-joints').checked)return;
+  const joint=Number($('joint').value),rect=canvas.getBoundingClientRect(),u=(e.clientX-rect.left)/rect.width,v=(e.clientY-rect.top)/rect.height;
+  if(![11,12,13,14,15,16,23,24,25,26,27,28].includes(joint)||u<0||u>1||v<0||v>1)return;
+  if(!originalFrames.has(drag.index))originalFrames.set(drag.index,structuredClone(analysis.frames[drag.index]));
+  analysis.frames[drag.index]=B.correctJoint(analysis.frames[drag.index],joint,drag.c.x+u*drag.c.width,drag.c.y+v*drag.c.height);
+  refreshCorrection(drag.index);await preview();if(displayed?.index===drag.index){$('edit-joints').checked=true;canvas.style.touchAction='none';}
+  status('Joint manually placed. Check the remaining joints, then confirm your review.');
+ });
+ canvas.addEventListener('pointercancel',()=>{jointPointer=null;});
+ canvas.addEventListener('lostpointercapture',()=>{jointPointer=null;});
+ $('undo-joints').addEventListener('click',async()=>{const index=Number($('frames').value);if(busy||!originalFrames.has(index))return;analysis.frames[index]=originalFrames.get(index);originalFrames.delete(index);refreshCorrection(index);await preview();status('Original detection restored for this sample.');});
  $('confirm').addEventListener('change',changed);$('full-context').addEventListener('change',preview);
  for(const id of ['side','side-view'])$(id).addEventListener('change',()=>{reset({keepPath:true});changed();});
  for(const id of ['video-start','video-end','video-athlete'])document.getElementById(id).addEventListener('input',()=>{reset();changed();});
