@@ -293,3 +293,12 @@ Analysis freezes each source frame before cropping it for the detector. Overlays
 Select Correct joint positions, choose the athlete's left/right shoulder, elbow, wrist, hip, knee or ankle, and tap or press-drag-release on the image. Missing detections can be populated manually. Gold points/edges indicate corrections; untouched predictions remain green. Angles recalculate from the edited coordinates, provenance is saved without inventing detector confidence, and every correction/undo clears review confirmation. Undo restores the original detection for the selected sample during the current session.
 
 Validation: 125 automated tests, including captured-image preview without reseeking, manual recovery of a missed detection, a known 90-degree angle, saving correction provenance, confirmation invalidation and undo isolation. Media/canvas tests are simulated; physical iPhone/Safari image decoding and touch interactions still require verification. This update does not improve the pose model or add temporal tracking/quality rejection.
+
+
+## Biomechanics test v0.17.17 — select an athlete and suggest a moving crop
+
+Pause on a fully visible runner and choose Select athlete, then tap their chest. An adjustable athlete-height estimate sets the torso template and padded square crop. Local appearance matching follows consecutive samples at approximately 15 fps for up to 3 seconds, independently of the skeleton detector. Low visual similarity or unexpected motion stops tracking; only the accepted portion becomes the marked segment. Review the moving crop before Analyze marked segment. Advanced crop controls retain Auto-find, drawn boxes and start/end guides.
+
+This is experimental appearance tracking, not person recognition. A strong visual match does not establish identity. Camera motion, occlusion, similar clothing and changes in scale can cause drift or early stops. Original video files are unchanged. The new path still uses the existing independent-frame pose analysis; sequential pose inference is not enabled by this change.
+
+Validation: 128 automated tests pass. The exact JavaScript tracker was also run on decoded RGB frames from the supplied 910x512 sprint clip, with a manually selected chest at 1.0 s and default 12% height: 34 accepted samples through 3.2 s, then a motion-consistency stop at 3.267 s during the background-person crossing. This is evidence for that selected segment only, not browser decoding or touch validation, nor automatic detection accuracy. Physical iPhone testing remains outstanding.
