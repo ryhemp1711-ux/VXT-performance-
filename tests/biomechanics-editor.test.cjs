@@ -2,7 +2,7 @@
 // These do not verify video decoding, pointer layout, or real pose inference.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const B=require('../preview/biomechanics/biomechanics-model.js');
-function editor(){
+function editor(tracker){
  const captures=[];
  class Element {
   constructor(){this.style={};this.value='';this.handlers={};this.hidden=false;this.disabled=false;this.checked=false;this.textContent='';this.options=[];}
@@ -13,20 +13,21 @@ function editor(){
   replaceChildren(){this.options=[];}
   toDataURL(type){captures.push({kind:'snapshot',canvas:this,type});return 'data:image/png;base64,fixture';}
   async decode(){}
+  closest(){return this;}
   getContext(){const canvas=this;return new Proxy({},{get:(target,key)=>key==='getImageData'?()=>({width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(canvas.width*canvas.height*4)}):['lineTo','arc'].includes(key)?(...args)=>captures.push({kind:key,canvas,args}):key==='drawImage'?(...args)=>captures.push({kind:'draw',canvas,args,width:canvas.width,height:canvas.height}):()=>{}});}
   getBoundingClientRect(){return {left:0,top:0,width:100,height:100};}
   setPointerCapture(id){this.capture=id;} hasPointerCapture(id){return this.capture===id;} releasePointerCapture(){this.capture=null;}
  }
  const elements=new Map(),el=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
  const doc={getElementById:el,createElement:()=>new Element(),addEventListener(){},dispatchEvent(){}};
- for(const [id,value] of Object.entries({'bio-zoom':'1','bio-center-x':'50','bio-center-y':'50','bio-model':'lite','bio-side':'left','video-start':'1','video-end':'1.2','video-athlete':'a'}))el(id).value=value;
+ for(const [id,value] of Object.entries({'bio-athlete-size':'12','bio-zoom':'1','bio-center-x':'50','bio-center-y':'50','bio-model':'lite','bio-side':'left','video-start':'1','video-end':'1.2','video-athlete':'a'}))el(id).value=value;
  el('bio-side-view').checked=true;
  const video=el('video-player');Object.assign(video,{readyState:2,seeking:false,duration:5,videoWidth:1920,videoHeight:1080,pause(){},getAttribute:()=> 'blob:fixture'});
  let time=1;Object.defineProperty(video,'currentTime',{get:()=>time,set:v=>{time=v;queueMicrotask(()=>video.fire('seeked'));}});
  const points=Array.from({length:33},(_,i)=>({x:.2+(i%5)*.1,y:.1+Math.floor(i/5)*.1,z:0,visibility:.95}));
  const requests=[],state={fail:false,poses:[points]};
  const module={FilesetResolver:{forVisionTasks:async()=>({})},PoseLandmarker:{createFromOptions:async (files,options)=>{requests.push(options);if(state.fail)throw Error('fixture download failure');return {detect:canvas=>{captures.push({kind:'detect',canvas});return {landmarks:state.poses};}};}}};
- const context={document:doc,VXTBiomechanics:B,window:{},Event:class{},structuredClone,performance,setTimeout,clearTimeout,__model:module};
+ const context={document:doc,VXTBiomechanics:B,VXTAthleteTracker:tracker,window:{},Event:class{},structuredClone,performance,setTimeout,clearTimeout,__model:module};
  let source=fs.readFileSync('preview/biomechanics/biomechanics.js','utf8');source=source.replace(/await import\('[^']+'\)/,'await Promise.resolve(__model)');vm.runInNewContext(source,context);
  return {el,api:context.window.VXTBiomechanicsEditor,state,requests,captures};
 }
@@ -210,4 +211,39 @@ test('manual placement recovers missed detections, invalidates confirmation, sav
  await el('bio-undo-joints').fire('click');assert.match(el('bio-results').textContent,/No athlete detected/);assert.equal(el('bio-confirm').disabled,true);
  api.restore(saved);await el('bio-preview').fire('click');assert.equal(el('bio-edit-joints').disabled,true);
  assert.match(el('bio-results').textContent,/Manually corrected/);
+});
+
+function trackingFixture(stopAfter=Infinity,onStep=()=>{}){
+ const T=require('../preview/biomechanics/athlete-tracker.js');
+ return {gray:x=>x,seed:()=>({cx:200,cy:200,bodyHeight:60,steps:0}),crop:T.crop,
+ step(im,s){onStep();return s.steps>=stopAfter?{ok:false,reason:'Crossing subject.'}:{ok:true,state:{...s,cx:s.cx+2,steps:s.steps+1}};}};
+}
+test('selected athlete path reaches detector, persists through model changes and round-trips',async()=>{
+ const {el,api,captures}=editor(trackingFixture());
+ await el('bio-pick-athlete').fire('click');assert.equal(el('bio-box-editor').hidden,false);
+ await el('bio-box-canvas').fire('pointerdown',{clientX:20,clientY:40});
+ assert.equal(el('video-start').value,'1');assert.equal(el('video-end').value,'4');
+ assert.match(el('bio-status').textContent,/Suggested moving crop ready/);
+ el('bio-model').value='full';await el('bio-model').fire('change');
+ captures.length=0;await el('bio-run').fire('click');el('bio-confirm').checked=true;
+ const data=api.getData();assert.equal(data.guidedPath.length,46);B.validate(data,data);
+ assert.ok(data.frames.at(-1).crop.x>data.frames[0].crop.x);
+ const draws=captures.filter(c=>c.kind==='draw'&&c.args.length===9);
+ for(const f of data.frames)assert.ok(draws.some(d=>Math.abs(d.args[1]-f.crop.x*data.width)<1e-6));
+ api.restore(data);assert.equal(JSON.stringify(api.getData()),JSON.stringify(data));
+});
+test('unreliable tracking shortens the segment and an immediate failure leaves markers intact',async()=>{
+ const {el}=editor(trackingFixture(4));await el('bio-pick-athlete').fire('click');
+ await el('bio-box-canvas').fire('pointerdown',{clientX:20,clientY:40});
+ assert.match(el('bio-status').textContent,/Tracking stopped.*Crossing subject/);
+ assert.ok(Number(el('video-end').value)<1.3);assert.equal(el('bio-run').disabled,false);
+ const failed=editor(trackingFixture(0));await failed.el('bio-pick-athlete').fire('click');
+ await failed.el('bio-box-canvas').fire('pointerdown',{clientX:20,clientY:40});
+ assert.match(failed.el('bio-status').textContent,/Could not follow/);assert.equal(failed.el('video-end').value,'1.2');
+});
+test('cancellation during tracking never installs a partial path or changes markers',async()=>{
+ let e;e=editor(trackingFixture(Infinity,()=>e.el('bio-cancel').fire('click')));
+ await e.el('bio-pick-athlete').fire('click');await e.el('bio-box-canvas').fire('pointerdown',{clientX:20,clientY:40});
+ assert.equal(e.el('video-end').value,'1.2');assert.match(e.el('bio-status').textContent,/canceled/);
+ assert.equal(e.el('bio-run').disabled,false);assert.equal(e.api.getData(),undefined);
 });

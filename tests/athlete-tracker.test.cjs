@@ -1,0 +1,5 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),T=require('../preview/biomechanics/athlete-tracker.js');
+const im=(cx,cy)=>{const width=120,height=100,data=new Float32Array(width*height);for(let y=0;y<12;y++)for(let x=0;x<8;x++)data[(cy-6+y)*width+cx-4+x]=((x*43+y*79+x*y*23)%200)+30;return {width,height,data};};
+test('selected torso follows translation and stops on unexpected motion',()=>{let s=T.seed(im(30,40),30,40,30);for(let x=34;x<=46;x+=4){const r=T.step(im(x,40),s);assert.equal(r.ok,true);assert.equal(r.state.cx,x);s=r.state;}const lost=T.step(im(39,40),s);assert.equal(lost.ok,false);});
+test('featureless selection and disappearance are not accepted',()=>{const empty={width:120,height:100,data:new Float32Array(12000)};assert.throws(()=>T.seed(empty,40,40,30),/detail/);assert.equal(T.step(empty,T.seed(im(30,40),30,40,30)).ok,false);});
+test('crop is square in source pixels and stays within image bounds',()=>{const c=T.crop({cx:4,cy:99,bodyHeight:30},120,100);assert.ok(c.x>=0&&c.y>=0&&c.x+c.width<=1&&c.y+c.height<=1);assert.equal(c.width*120,c.height*100);});
